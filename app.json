@@ -30,6 +30,12 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-router"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1e46f9a4-349a-4e8b-94d7-fe8c2d8879b1"
+      }
+    }
   }
 }
