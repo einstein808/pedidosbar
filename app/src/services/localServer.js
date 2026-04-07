@@ -36,8 +36,15 @@ export const startLocalServer = (port = 8080) => {
             if (payload.type === 'NEW_ORDER') {
               console.log('[LocalServer] ✅ Pedido P2P recebido:', payload.order?.nome);
               const orderData = { ...payload.order, source: 'TOTEM_P2P', status: 'pendente' };
-              await enqueueOfflineOrder(orderData);
-              if (onOrderReceivedCallback) onOrderReceivedCallback(orderData);
+              
+              if (onOrderReceivedCallback) {
+                // Callback ativo (gerenciarPedidos aberto) — injeta direto na UI
+                // NÃO enfileira na fila offline para evitar duplicação
+                onOrderReceivedCallback(orderData);
+              } else {
+                // Nenhum listener ativo — salva na fila offline como fallback
+                await enqueueOfflineOrder(orderData);
+              }
               // Confirmação de recebimento
               socket.write(JSON.stringify({ status: 'OK', orderId: orderData.offlineId }) + '\n');
 

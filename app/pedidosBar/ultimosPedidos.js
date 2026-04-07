@@ -149,16 +149,23 @@ export default function UltimosPedidosScreen() {
     return () => unsubscribe();
   }, [recentProntos]);
 
-  const orders = [...offlineOrders, ...rawOrders].map(order => 
-     offlineStatusUpdates[order.id] ? { ...order, ...offlineStatusUpdates[order.id] } : order
-  );
+  // Mescla pedidos offline com pedidos normais, eliminando duplicatas por offlineId
+  const orders = (() => {
+    const rawIds = new Set(rawOrders.map(o => o.offlineId).filter(Boolean));
+    const uniqueOffline = offlineOrders.filter(o => !o.offlineId || !rawIds.has(o.offlineId));
+    return [...uniqueOffline, ...rawOrders].map(order =>
+      offlineStatusUpdates[order.id] ? { ...order, ...offlineStatusUpdates[order.id] } : order
+    );
+  })();
+
+  const partyId = festaSelecionada?.id || festaSelecionada?.uid;
 
   const pendingOrdersFull = orders
-    .filter((order) => order.status === 'pendente' && order.partyId === festaSelecionada?.id)
+    .filter((order) => order.status === 'pendente' && (!partyId || order.partyId === partyId))
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   const readyOrdersFull = orders
-    .filter((order) => order.status === 'pronto' && order.partyId === festaSelecionada?.id)
+    .filter((order) => order.status === 'pronto' && (!partyId || order.partyId === partyId))
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   const maxPages = Math.max(1, Math.ceil(Math.max(pendingOrdersFull.length, readyOrdersFull.length) / 5));

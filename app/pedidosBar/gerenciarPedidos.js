@@ -55,21 +55,27 @@ export default function GerenciarPedidosScreen() {
           startLocalServer(8080);
         }
         // Registra callback para quando chegar pedido P2P
-        setOnOrderReceived((order) => {
+        setOnOrderReceived(async (order) => {
           setP2pOrderCount(prev => prev + 1);
           // Injeta o pedido P2P junto com os pedidos normais
           const p2pEntry = {
-            id: `p2p-${Date.now()}`,
+            id: order.offlineId || `p2p-${Date.now()}`,
             ...order,
             isP2P: true,
             status: 'pendente'
           };
           setRawOrders(prev => {
+            // Evita duplicatas pelo offlineId
+            if (prev.some(o => o.offlineId && o.offlineId === order.offlineId)) return prev;
             const updated = [p2pEntry, ...prev];
-            // Persiste P2P no cache para sobreviver reinícios
             cacheData(CACHE_KEYS.PEDIDOS, updated);
             return updated;
           });
+          
+          // Persiste na fila offline para sync com Firebase quando a internet voltar
+          const { enqueueOfflineOrder } = require('../src/services/offlineQueue');
+          await enqueueOfflineOrder(order);
+          
           showToast('📡 Pedido P2P', `Totem enviou pedido pela rede local!`, 'warning');
         });
       }
@@ -377,9 +383,15 @@ export default function GerenciarPedidosScreen() {
     }
   };
 
-  const mergedOrders = [...offlineOrders, ...rawOrders].map(order =>
-    offlineStatusUpdates[order.id] ? { ...order, ...offlineStatusUpdates[order.id] } : order
-  );
+  // Mescla pedidos offline com pedidos normais, eliminando duplicatas por offlineId
+  const mergedOrders = (() => {
+    const rawIds = new Set(rawOrders.map(o => o.offlineId).filter(Boolean));
+    // Só inclui pedidos offline que NÃO já estejam presentes nos rawOrders (evita duplicata P2P)
+    const uniqueOffline = offlineOrders.filter(o => !o.offlineId || !rawIds.has(o.offlineId));
+    return [...uniqueOffline, ...rawOrders].map(order =>
+      offlineStatusUpdates[order.id] ? { ...order, ...offlineStatusUpdates[order.id] } : order
+    );
+  })();
 
   // Usa apenas a festa selecionada pelo barista no momento (Zustand),
   // removendo dependência de dados externos para evitar ocultação acidental de pedidos.
