@@ -3,6 +3,7 @@ import { enqueueOfflineOrder } from './offlineQueue';
 
 let serverInstance = null;
 let onOrderReceivedCallback = null;
+const activeSockets = new Set(); // Mantém as conexões vivas
 
 export const startLocalServer = (port = 8080) => {
   if (serverInstance) {
@@ -13,6 +14,7 @@ export const startLocalServer = (port = 8080) => {
   try {
     serverInstance = TcpSocket.createServer((socket) => {
       console.log('[LocalServer] Cliente P2P conectado:', socket.remoteAddress);
+      activeSockets.add(socket);
 
       // Buffer por socket — TCP pode fragmentar o JSON em vários chunks
       let buffer = '';
@@ -36,7 +38,8 @@ export const startLocalServer = (port = 8080) => {
               const orderData = { ...payload.order, source: 'TOTEM_P2P', status: 'pendente' };
               await enqueueOfflineOrder(orderData);
               if (onOrderReceivedCallback) onOrderReceivedCallback(orderData);
-              socket.write(JSON.stringify({ status: 'OK' }) + '\n');
+              // Confirmação de recebimento
+              socket.write(JSON.stringify({ status: 'OK', orderId: orderData.offlineId }) + '\n');
 
             } else if (payload.type === 'PING') {
               console.log('[LocalServer] 🏓 PING recebido, respondendo PONG');
@@ -52,11 +55,13 @@ export const startLocalServer = (port = 8080) => {
       socket.on('error', (err) => {
         console.log('[LocalServer] Socket error:', err.message);
         buffer = '';
+        activeSockets.delete(socket);
       });
 
       socket.on('close', () => {
         console.log('[LocalServer] Conexão encerrada.');
         buffer = '';
+        activeSockets.delete(socket);
       });
     });
 
@@ -66,6 +71,7 @@ export const startLocalServer = (port = 8080) => {
 
     serverInstance.on('error', (err) => {
       console.log('[LocalServer] Falha no servidor:', err.message);
+      activeSockets.clear();
       serverInstance = null;
     });
 
@@ -77,9 +83,11 @@ export const startLocalServer = (port = 8080) => {
 
 export const stopLocalServer = () => {
   if (serverInstance) {
+    activeSockets.forEach(sock => { try { sock.destroy(); } catch (_) { } });
+    activeSockets.clear();
     try { serverInstance.close(); } catch (_) {}
     serverInstance = null;
-    console.log('[LocalServer] Servidor finalizado.');
+    console.log('[LocalServer] Servidor finalizado e Sockets limpos.');
   }
 };
 
@@ -87,4 +95,27 @@ export const isServerRunning = () => !!serverInstance;
 
 export const setOnOrderReceived = (callback) => {
   onOrderReceivedCallback = callback;
+};
+
+// Nova Função: Transmite a alteração de status para todos os totens logados
+export const broadcastOrderStatus = (orderId, novoStatus) => {
+  if (activeSockets.size === 0) return;
+  console.log(`[LocalServer] 📡 Fazendo broadcast local de alteração de status ${orderId} -> ${novoStatus}`);
+  
+  const payload = JSON.stringify({
+    type: 'STATUS_UPDATE',
+    orderId,
+    status: novoStatus
+  }) + '\n';
+
+  let sents = 0;
+  activeSockets.forEach(socket => {
+    try {
+      socket.write(payload);
+      sents++;
+    } catch (error) {
+      console.log('[LocalServer] Erro ao enviar update para um socket:', error.message);
+    }
+  });
+  console.log(`[LocalServer] Broadcast P2P enviado para ${sents} clientes vivos.`);
 };

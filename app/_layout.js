@@ -10,6 +10,15 @@ export default function Layout() {
 
   useEffect(() => {
     initNetworkListener();
+
+    // Start Real-Time P2P Listener for Guest/VIP device (Totem)
+    const { startP2PListener } = require('./src/services/localClient');
+    const { useAppStore } = require('./src/store/useAppStore');
+
+    startP2PListener((orderId, novoStatus) => {
+      // Updates offline UI globally
+      useAppStore.getState().alterarStatusPedidoGlobal(orderId, novoStatus);
+    });
   }, [initNetworkListener]);
 
   return (

@@ -16,7 +16,7 @@ import { withTimeout } from '../src/utils/firebaseHelpers';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { enqueueDrinkUpdate } from '../src/services/offlineQueue';
-import { setOnOrderReceived, isServerRunning, startLocalServer } from '../src/services/localServer';
+import { setOnOrderReceived, isServerRunning, startLocalServer, broadcastOrderStatus } from '../src/services/localServer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function GerenciarPedidosScreen() {
@@ -511,6 +511,11 @@ export default function GerenciarPedidosScreen() {
         } else {
           showToast('Atualizado ✅', `Pedido → "${statusDisplay}" (Sem Whatsapp)`);
         }
+      }
+      
+      // P2P BROADCAST: Notifica qualquer Totem vivo na rede local da mudança de status
+      if (isServerRunning()) {
+        broadcastOrderStatus(orderId, newStatus);
       }
     } catch (error) {
       showToast('Erro ❌', error.message, 'error');
