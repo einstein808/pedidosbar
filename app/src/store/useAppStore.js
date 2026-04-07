@@ -42,11 +42,12 @@ export const useAppStore = create(
     {
       name: '@barman_app_state',
       storage: createJSONStorage(() => AsyncStorage),
-      // Salvar apenas a festa selecionada, infos de cliente e a preferência de screensaver
+      // Salvar festa, infos de cliente, screensaver e carrinho de drinks
       partialize: (state) => ({ 
         festaSelecionada: state.festaSelecionada,
         clientInfo: state.clientInfo,
-        screensaverEnabled: state.screensaverEnabled
+        screensaverEnabled: state.screensaverEnabled,
+        selectedDrinks: state.selectedDrinks,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

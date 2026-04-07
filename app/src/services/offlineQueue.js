@@ -261,6 +261,38 @@ export const syncOfflineOrders = async () => {
       }
     }
 
+    // 4. Sincronizar criação de drinks pendentes
+    const DRINK_CREATE_KEY = '@barman_drinks_create_queue';
+    try {
+      const createQueueJson = await AsyncStorage.getItem(DRINK_CREATE_KEY);
+      const createQueue = createQueueJson ? JSON.parse(createQueueJson) : [];
+      
+      if (createQueue.length > 0) {
+        console.log(`[OfflineQueue] Sincronizando ${createQueue.length} drinks criados offline...`);
+        const pendingCreates = [];
+        
+        for (const item of createQueue) {
+          try {
+            await set(ref(db, `drinks/${item.id}`), item.data);
+            console.log(`[OfflineQueue] Drink "${item.id}" sincronizado com Firebase.`);
+          } catch (err) {
+            console.error(`[OfflineQueue] Falha ao sync drink "${item.id}":`, err);
+            pendingCreates.push(item);
+          }
+        }
+        
+        if (pendingCreates.length === 0) {
+          await AsyncStorage.removeItem(DRINK_CREATE_KEY);
+          console.log('[OfflineQueue] Todos os drinks offline sincronizados.');
+        } else {
+          await AsyncStorage.setItem(DRINK_CREATE_KEY, JSON.stringify(pendingCreates));
+          console.log(`[OfflineQueue] Restam ${pendingCreates.length} drinks na fila de criação.`);
+        }
+      }
+    } catch (err) {
+      console.error('[OfflineQueue] Erro ao sync fila de criação de drinks:', err);
+    }
+
   } catch (error) {
     console.error('[OfflineQueue] Erro interno durante sincronização:', error);
   } finally {

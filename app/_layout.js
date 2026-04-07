@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { useNetworkStore } from "./src/store/useNetworkStore";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import WarmCache from "./src/components/WarmCache";
 
 export default function Layout() {
   const initNetworkListener = useNetworkStore(s => s.initNetworkListener);
@@ -13,6 +14,7 @@ export default function Layout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <WarmCache />
       <Stack screenOptions={{ headerShown: false }} />
     </GestureHandlerRootView>
   );

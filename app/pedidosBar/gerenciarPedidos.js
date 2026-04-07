@@ -41,6 +41,7 @@ export default function GerenciarPedidosScreen() {
   const [dismissedAlerts, setDismissedAlerts] = useState({});
   const party = useAppStore(s => s.festaSelecionada);
   const rotationTimer = useRef(null);
+  const cacheLoaded = useRef(false);
   const [toast, setToast] = useState(null);
   const [p2pOrderCount, setP2pOrderCount] = useState(0); // contador visual de pedidos P2P recebidos
 
@@ -63,7 +64,12 @@ export default function GerenciarPedidosScreen() {
             isP2P: true,
             status: 'pendente'
           };
-          setRawOrders(prev => [p2pEntry, ...prev]);
+          setRawOrders(prev => {
+            const updated = [p2pEntry, ...prev];
+            // Persiste P2P no cache para sobreviver reinícios
+            cacheData(CACHE_KEYS.PEDIDOS, updated);
+            return updated;
+          });
           showToast('📡 Pedido P2P', `Totem enviou pedido pela rede local!`, 'warning');
         });
       }
@@ -100,12 +106,15 @@ export default function GerenciarPedidosScreen() {
       const cachedDrinks = await getCachedData(CACHE_KEYS.DRINKS_CATALOG, []);
       const cachedEstoque = await getCachedData(CACHE_KEYS.ESTOQUE, {});
       const cachedDismissed = await getCachedData(CACHE_KEYS.DISMISSED_ALERTS, {});
+      const cachedFestas = await getCachedData(CACHE_KEYS.FESTAS, []);
 
       if (cachedOrders.length > 0) setRawOrders(cachedOrders);
       if (Object.keys(cachedClients).length > 0) setClientsCache(cachedClients);
       if (cachedDrinks.length > 0) setDrinksCatalog(cachedDrinks);
       if (Object.keys(cachedEstoque).length > 0) setStockData(cachedEstoque);
       if (Object.keys(cachedDismissed).length > 0) setDismissedAlerts(cachedDismissed);
+      if (cachedFestas.length > 0) setActiveParties(cachedFestas);
+      cacheLoaded.current = true;
     };
     loadCache();
   }, []);
@@ -138,19 +147,27 @@ export default function GerenciarPedidosScreen() {
       ordersRef,
       (snapshot) => {
         const data = snapshot.val();
-        const ordersList = data
-          ? Object.keys(data).map((key) => ({ id: key, ...data[key] }))
-          : [];
-        setRawOrders(ordersList);
-        cacheData(CACHE_KEYS.PEDIDOS, ordersList);
+        if (data) {
+          const ordersList = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
+          setRawOrders(ordersList);
+          cacheData(CACHE_KEYS.PEDIDOS, ordersList);
+        } else if (!isOffline) {
+          // Só zera se realmente estiver online (significa que não há pedidos no Firebase)
+          setRawOrders([]);
+          cacheData(CACHE_KEYS.PEDIDOS, []);
+        }
+        // Se offline e data=null, mantém os dados do cache carregados na montagem
       },
       (error) => {
-        if (Platform.OS === 'web') window.alert('Erro: Falha ao carregar pedidos: ' + error.message);
-        else Alert.alert('Erro', 'Falha ao carregar pedidos: ' + error.message);
+        // Offline: não mostra erros de rede, dados já estão no cache
+        if (!isOffline) {
+          if (Platform.OS === 'web') window.alert('Erro: Falha ao carregar pedidos: ' + error.message);
+          else Alert.alert('Erro', 'Falha ao carregar pedidos: ' + error.message);
+        }
       }
     );
     return () => unsubscribeOrders();
-  }, []);
+  }, [isOffline]);
 
   useEffect(() => {
     const drinksRef = ref(db, 'drinks');
@@ -160,10 +177,13 @@ export default function GerenciarPedidosScreen() {
         const catalog = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
         setDrinksCatalog(catalog);
         cacheData(CACHE_KEYS.DRINKS_CATALOG, catalog);
+      } else if (!isOffline) {
+        // Só zera se online de verdade
+        setDrinksCatalog([]);
       }
     });
     return () => unsubscribeDrinks();
-  }, []);
+  }, [isOffline]);
 
   useEffect(() => {
     const festasRef = ref(db, 'festas');
@@ -172,12 +192,15 @@ export default function GerenciarPedidosScreen() {
         const data = snapshot.val();
         const activeIds = Object.keys(data).filter(key => data[key].status === 'ativa');
         setActiveParties(activeIds);
-      } else {
+        cacheData(CACHE_KEYS.FESTAS, activeIds);
+      } else if (!isOffline) {
         setActiveParties([]);
+        cacheData(CACHE_KEYS.FESTAS, []);
       }
+      // Se offline e snapshot vazio, mantém os activeParties do cache
     });
     return () => unsubscribeFestas();
-  }, []);
+  }, [isOffline]);
 
   // ---- MONITORAMENTO DE ESTOQUE EM TEMPO REAL ----
   useEffect(() => {
@@ -358,8 +381,12 @@ export default function GerenciarPedidosScreen() {
     offlineStatusUpdates[order.id] ? { ...order, ...offlineStatusUpdates[order.id] } : order
   );
 
+  // Usa apenas a festa selecionada pelo barista no momento (Zustand),
+  // removendo dependência de dados externos para evitar ocultação acidental de pedidos.
+  const partyId = party?.id || party?.uid;
+
   const orders = mergedOrders
-    .filter(order => activeParties.includes(order.partyId))
+    .filter(order => !partyId || order.partyId === partyId)
     .map(order => ({
       ...order,
       clientInfo: (order.clienteId && clientsCache[order.clienteId]) ? clientsCache[order.clienteId] : {}

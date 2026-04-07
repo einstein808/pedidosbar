@@ -153,7 +153,7 @@ export default function FechamentoFestaScreen() {
            const drinkCost = drinkObj.fichaTecnica.reduce((dTotal, fItem) => {
              const insumoObj = insumos.find(ins => ins.id === fItem.insumoId);
              if (!insumoObj) return dTotal;
-             return dTotal + (insumoObj.custoUnidadeMinima * (parseFloat(fItem.quantity) || 0));
+             return dTotal + ((insumoObj.custoUnidadeMinima || 0) * (parseFloat(fItem.quantity) || 0));
            }, 0);
            dynamicTotalBar += (drinkCost * (parseFloat(drink.quantity) || 0));
          }
@@ -205,7 +205,7 @@ export default function FechamentoFestaScreen() {
            const drinkCost = drinkObj.fichaTecnica.reduce((dTotal, fItem) => {
              const insumoObj = insumos.find(ins => ins.id === fItem.insumoId);
              if (!insumoObj) return dTotal;
-             return dTotal + (insumoObj.custoUnidadeMinima * (parseFloat(fItem.quantity) || 0));
+             return dTotal + ((insumoObj.custoUnidadeMinima || 0) * (parseFloat(fItem.quantity) || 0));
            }, 0);
            const totalDrinkCost = drinkCost * (parseFloat(drink.quantity) || 0);
            
@@ -259,7 +259,10 @@ export default function FechamentoFestaScreen() {
     }
   };
 
-  const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  const formatCurrency = (val) => {
+    const num = isNaN(val) || val === null || val === undefined ? 0 : val;
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(num);
+  };
 
   const inputGroup = (label, value, setter, icon, placeholder, isCurrency = true) => (
     <View style={{ marginBottom: 14 }}>
@@ -517,9 +520,11 @@ export default function FechamentoFestaScreen() {
 
             </Animated.View>
           ) : (
-            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={{ alignItems: 'center', marginTop: 40, opacity: 0.5 }}>
-               <Ionicons name="bar-chart-outline" size={64} color="#cc9e6f" />
-               <Text style={{ color: '#707b55', fontSize: 15, marginTop: 12, textAlign: 'center' }}>Selecione um evento acima para carregar as métricas financeiras.</Text>
+            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={{ marginTop: 40 }}>
+              <View style={{ alignItems: 'center', opacity: 0.5 }}>
+                 <Ionicons name="bar-chart-outline" size={64} color="#cc9e6f" />
+                 <Text style={{ color: '#707b55', fontSize: 15, marginTop: 12, textAlign: 'center' }}>Selecione um evento acima para carregar as métricas financeiras.</Text>
+              </View>
             </Animated.View>
           )}
 

@@ -19,6 +19,9 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { withTimeout } from '../src/utils/firebaseHelpers';
+import { cacheData, getCachedData, CACHE_KEYS } from '../src/services/offlineCache';
+import { useNetworkStore } from '../src/store/useNetworkStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import '../../global.css';
 
 export default function CreateDrink() {
@@ -59,6 +62,8 @@ export default function CreateDrink() {
   const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
 
+  const isOffline = useNetworkStore(s => s.isOffline);
+
   const saveDrink = async () => {
     if (!name || !ingredients || !type || !image) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos!');
@@ -66,20 +71,61 @@ export default function CreateDrink() {
     }
 
     setSaving(true);
-    try {
-      const db = getDatabase(app);
-      const drinksRef = ref(db, 'drinks/' + name);
-      await withTimeout(set(drinksRef, { name, ingredients, type, image, fichaTecnica: fichasTecnicas }), 4000);
+    const drinkData = { name, ingredients, type, image, fichaTecnica: fichasTecnicas };
 
-      Alert.alert('Sucesso', 'Drink adicionado com sucesso!');
-      setName('');
-      setIngredients('');
-      setFichasTecnicas([]);
-      setType('');
-      setImage('');
+    try {
+      if (isOffline) {
+        // Fallback offline: salva no cache local e enfileira para sync
+        const cachedCatalog = await getCachedData(CACHE_KEYS.DRINKS_CATALOG, []);
+        const newEntry = { id: name, ...drinkData };
+        const updatedCatalog = [...cachedCatalog.filter(d => d.id !== name), newEntry];
+        await cacheData(CACHE_KEYS.DRINKS_CATALOG, updatedCatalog);
+
+        // Enfileira criação para sync posterior
+        const DRINK_CREATE_KEY = '@barman_drinks_create_queue';
+        const queueJson = await AsyncStorage.getItem(DRINK_CREATE_KEY);
+        const queue = queueJson ? JSON.parse(queueJson) : [];
+        queue.push({ id: name, data: drinkData });
+        await AsyncStorage.setItem(DRINK_CREATE_KEY, JSON.stringify(queue));
+
+        Alert.alert('Salvo Localmente ☁️', 'Drink salvo offline. Será sincronizado quando a internet voltar.');
+        setName('');
+        setIngredients('');
+        setFichasTecnicas([]);
+        setType('');
+        setImage('');
+      } else {
+        const db = getDatabase(app);
+        const drinksRef = ref(db, 'drinks/' + name);
+        await withTimeout(set(drinksRef, drinkData), 4000);
+
+        Alert.alert('Sucesso', 'Drink adicionado com sucesso!');
+        setName('');
+        setIngredients('');
+        setFichasTecnicas([]);
+        setType('');
+        setImage('');
+      }
     } catch (error) {
       if (error.message === 'TIMEOUT_FIREBASE') {
-        Alert.alert('Falha na Conexão', 'O Laboratório de Drinks exige internet para cadastrar receitas base.');
+        // Timeout = rede fraca, salva offline como fallback
+        const cachedCatalog = await getCachedData(CACHE_KEYS.DRINKS_CATALOG, []);
+        const newEntry = { id: name, ...drinkData };
+        const updatedCatalog = [...cachedCatalog.filter(d => d.id !== name), newEntry];
+        await cacheData(CACHE_KEYS.DRINKS_CATALOG, updatedCatalog);
+
+        const DRINK_CREATE_KEY = '@barman_drinks_create_queue';
+        const queueJson = await AsyncStorage.getItem(DRINK_CREATE_KEY);
+        const queue = queueJson ? JSON.parse(queueJson) : [];
+        queue.push({ id: name, data: drinkData });
+        await AsyncStorage.setItem(DRINK_CREATE_KEY, JSON.stringify(queue));
+
+        Alert.alert('Rede Fraca', 'Drink salvo localmente. Será sincronizado automaticamente.');
+        setName('');
+        setIngredients('');
+        setFichasTecnicas([]);
+        setType('');
+        setImage('');
       } else {
         Alert.alert('Erro', 'Erro ao salvar o drink: ' + error.message);
       }

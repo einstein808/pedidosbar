@@ -65,9 +65,11 @@ export default function DrinksSelectionScreen() {
         const fullCatalog = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
         cacheData(CACHE_KEYS.DRINKS_CATALOG, fullCatalog);
         setDrinks(fullCatalog.filter((drink) => !drink.inactive));
-      } else {
+      } else if (!isOffline) {
+        // Só zera quando online de verdade (não há drinks no Firebase)
         setDrinks([]);
       }
+      // Se offline e data=null, mantém os dados do cache
     });
 
     // 3. Monitorar Status da Festa (Fase 3: Proteção)
@@ -121,7 +123,7 @@ export default function DrinksSelectionScreen() {
       unsubscribeParty();
       unsubscribeVIPOrders();
     };
-  }, [partyId, clientInfo]);
+  }, [partyId, clientInfo, isOffline]);
 
   const filteredDrinks = drinks.filter((drink) => {
     if (filter === 'all') return true;

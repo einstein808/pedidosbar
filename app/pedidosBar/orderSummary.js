@@ -78,6 +78,7 @@ export default function OrderSummaryScreen() {
     const orderNumber = Math.floor(100 + Math.random() * 900).toString();
     
     const pedidoNovo = {
+      offlineId: `local-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       numeroPedido: orderNumber,
       clienteId: clientInfo.id,
       nome: clientInfo.name,
