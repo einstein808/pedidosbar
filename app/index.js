@@ -10,12 +10,12 @@ import { useAppStore } from './src/store/useAppStore';
 export default function Home() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
-  
+
   const screensaverEnabled = useAppStore(s => s.screensaverEnabled);
   const setScreensaverEnabled = useAppStore(s => s.setScreensaverEnabled);
-  
+
   const router = useRouter();
-  
+
   // Timer de inatividade (15 segundos)
   const IDLE_TIME = 15000;
   const idleTimer = useRef(null);
@@ -56,17 +56,17 @@ export default function Home() {
 
   return (
     <SafeAreaView className="flex-1 bg-barsand" onTouchStart={resetTimer}>
-      
+
       {/* Botão Superior Direito - Habilitar/Desabilitar Screensaver */}
       <View className="absolute top-12 right-6 z-50">
-        <TouchableOpacity 
+        <TouchableOpacity
           onPress={() => setScreensaverEnabled(!screensaverEnabled)}
           activeOpacity={0.7}
           className="bg-white/50 p-3 rounded-full border border-bargold/30 flex-row items-center gap-2 shadow-sm"
         >
-          <Ionicons 
-            name={screensaverEnabled ? "tv" : "tv-outline"} 
-            size={20} 
+          <Ionicons
+            name={screensaverEnabled ? "tv" : "tv-outline"}
+            size={20}
             color={screensaverEnabled ? "#78a764" : "#c8cac6"}
           />
           <Text style={{ color: screensaverEnabled ? "#78a764" : "#c8cac6", fontSize: 12, fontWeight: '700' }}>
@@ -84,14 +84,14 @@ export default function Home() {
 
         {/* Logo (Com Toque Longo Secreto) */}
         <Animated.View entering={FadeInUp.duration(600)} className="items-center mb-12 z-10 mt-8">
-          <Pressable 
-            onPress={() => {}} 
-            onLongPress={() => setShowAdminModal(true)} 
+          <Pressable
+            onPress={() => { }}
+            onLongPress={() => setShowAdminModal(true)}
             delayLongPress={1500}
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
           >
             <View className="items-center">
-              <View 
+              <View
                 className="bg-bardark rounded-3xl p-6 mb-6 shadow-xl shadow-bardark/30"
                 style={{ elevation: 8 }}
               >
@@ -112,10 +112,10 @@ export default function Home() {
 
         {/* Botões do Cliente (3 opções) */}
         <Animated.View entering={FadeInUp.duration(500).delay(200)} className="w-full gap-4 z-10 pb-8">
-          
+
           {/* Opção 1: Convidado Sem Cadastro */}
           <TouchableOpacity activeOpacity={0.8} className="w-full" onPress={() => router.push('/pedidosBar?mode=guest')}>
-            <View 
+            <View
               className="flex-row items-center bg-[#F5F0EA] rounded-[20px] p-5 gap-4 shadow-xl border-2 border-bargold/30"
               style={{ elevation: 4 }}
             >
@@ -138,11 +138,11 @@ export default function Home() {
           <TouchableOpacity activeOpacity={0.8} className="w-full" onPress={() => {
             // Limpa dados de sessões anteriores para forçar busca do cliente no totem
             import('../app/src/store/useAppStore').then(module => {
-               module.useAppStore.getState().setClientInfo({ name: '', whatsapp: '' });
-               router.push('/pedidosBar');
+              module.useAppStore.getState().setClientInfo({ name: '', whatsapp: '' });
+              router.push('/pedidosBar');
             }).catch(() => router.push('/pedidosBar'));
           }}>
-            <View 
+            <View
               className="flex-row items-center bg-[#1c1f0f] rounded-[20px] p-5 gap-4 shadow-xl shadow-bardark/40"
               style={{ elevation: 8 }}
             >
@@ -163,7 +163,7 @@ export default function Home() {
 
           {/* Opção 3: Cliente VIP */}
           <TouchableOpacity activeOpacity={0.8} className="w-full" onPress={() => router.push('/vip')}>
-            <View 
+            <View
               className="flex-row items-center bg-[#F5F0EA] rounded-[20px] p-5 gap-4 shadow-xl border-2 border-bardark/10"
               style={{ elevation: 2 }}
             >
@@ -187,52 +187,52 @@ export default function Home() {
 
       {/* Modal Admin Secreto */}
       <Modal visible={showAdminModal} transparent animationType="fade" onRequestClose={() => setShowAdminModal(false)}>
-         <View style={{ flex: 1, backgroundColor: 'rgba(28, 31, 15, 0.9)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <View style={{ backgroundColor: '#F5F0EA', borderRadius: 24, padding: 32, width: '100%', maxWidth: 360, alignItems: 'center' }}>
-               <View style={{ backgroundColor: '#1c1f0f', borderRadius: 20, padding: 16, marginBottom: 20 }}>
-                  <Ionicons name="lock-closed" size={32} color="#cc9e6f" />
-               </View>
-               <Text style={{ color: '#1c1f0f', fontSize: 22, fontWeight: '800', marginBottom: 8 }}>Acesso Gestor</Text>
-               <Text style={{ color: '#707b55', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>Digite o PIN de acesso à área da equipe.</Text>
-               
-               <TextInput
-                  value={adminPassword}
-                  onChangeText={setAdminPassword}
-                  secureTextEntry
-                  placeholder="****"
-                  placeholderTextColor="#c8cac6"
-                  keyboardType="numeric"
-                  style={{
-                     backgroundColor: '#FFFFFF',
-                     width: '100%',
-                     borderRadius: 16,
-                     borderWidth: 2,
-                     borderColor: '#e8e4de',
-                     padding: 16,
-                     fontSize: 24,
-                     textAlign: 'center',
-                     fontWeight: '700',
-                     color: '#1c1f0f',
-                     marginBottom: 24
-                  }}
-               />
-
-               <View style={{ flexDirection: 'row', width: '100%', gap: 12 }}>
-                  <TouchableOpacity 
-                     onPress={() => setShowAdminModal(false)}
-                     style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(28, 31, 15, 0.05)', alignItems: 'center' }}
-                  >
-                     <Text style={{ color: '#707b55', fontWeight: '700', fontSize: 16 }}>Cancelar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                     onPress={handleAdminAccess}
-                     style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: '#1c1f0f', alignItems: 'center' }}
-                  >
-                     <Text style={{ color: '#cc9e6f', fontWeight: '800', fontSize: 16 }}>Entrar</Text>
-                  </TouchableOpacity>
-               </View>
+        <View style={{ flex: 1, backgroundColor: 'rgba(28, 31, 15, 0.9)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <View style={{ backgroundColor: '#F5F0EA', borderRadius: 24, padding: 32, width: '100%', maxWidth: 360, alignItems: 'center' }}>
+            <View style={{ backgroundColor: '#1c1f0f', borderRadius: 20, padding: 16, marginBottom: 20 }}>
+              <Ionicons name="lock-closed" size={32} color="#cc9e6f" />
             </View>
-         </View>
+            <Text style={{ color: '#1c1f0f', fontSize: 22, fontWeight: '800', marginBottom: 8 }}>Acesso Gestor</Text>
+            <Text style={{ color: '#707b55', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>Digite o PIN de acesso à área da equipe.</Text>
+
+            <TextInput
+              value={adminPassword}
+              onChangeText={setAdminPassword}
+              secureTextEntry
+              placeholder="****"
+              placeholderTextColor="#c8cac6"
+              keyboardType="numeric"
+              style={{
+                backgroundColor: '#FFFFFF',
+                width: '100%',
+                borderRadius: 16,
+                borderWidth: 2,
+                borderColor: '#e8e4de',
+                padding: 16,
+                fontSize: 24,
+                textAlign: 'center',
+                fontWeight: '700',
+                color: '#1c1f0f',
+                marginBottom: 24
+              }}
+            />
+
+            <View style={{ flexDirection: 'row', width: '100%', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setShowAdminModal(false)}
+                style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: 'rgba(28, 31, 15, 0.05)', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#707b55', fontWeight: '700', fontSize: 16 }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAdminAccess}
+                style={{ flex: 1, padding: 16, borderRadius: 16, backgroundColor: '#1c1f0f', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#cc9e6f', fontWeight: '800', fontSize: 16 }}>Entrar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
 
     </SafeAreaView>

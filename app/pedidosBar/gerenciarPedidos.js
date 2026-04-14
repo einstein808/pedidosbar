@@ -71,11 +71,11 @@ export default function GerenciarPedidosScreen() {
             cacheData(CACHE_KEYS.PEDIDOS, updated);
             return updated;
           });
-          
+
           // Persiste na fila offline para sync com Firebase quando a internet voltar
           const { enqueueOfflineOrder } = require('../src/services/offlineQueue');
           await enqueueOfflineOrder(order);
-          
+
           showToast('📡 Pedido P2P', `Totem enviou pedido pela rede local!`, 'warning');
         });
       }
@@ -524,7 +524,7 @@ export default function GerenciarPedidosScreen() {
           showToast('Atualizado ✅', `Pedido → "${statusDisplay}" (Sem Whatsapp)`);
         }
       }
-      
+
       // P2P BROADCAST: Notifica qualquer Totem vivo na rede local da mudança de status
       if (isServerRunning()) {
         broadcastOrderStatus(orderId, newStatus);

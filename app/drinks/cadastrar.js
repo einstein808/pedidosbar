@@ -317,27 +317,27 @@ export default function CreateDrink() {
 
             {fichasTecnicas.map((item, index) => (
               <View key={index} style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                  <View style={{ flex: 2, backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#e8e4de', justifyContent: 'center' }}>
-                    <Picker
-                      selectedValue={item.insumoId || ''}
-                      onValueChange={(val) => {
-                        const newFicha = [...fichasTecnicas];
-                        newFicha[index].insumoId = val;
-                        const chosen = insumos.find(i => i.id === val);
-                        if (chosen) {
-                           newFicha[index].name = chosen.nome;
-                           newFicha[index].unit = chosen.unidade;
-                        }
-                        setFichasTecnicas(newFicha);
-                      }}
-                      style={{ color: '#1c1f0f', transform: [{ scale: 0.85 }], height: 44 }}
-                    >
-                      <Picker.Item label="Selecione..." value="" enabled={false} color="#a0a29f" />
-                      {insumos.map(ins => (
-                        <Picker.Item key={ins.id} label={ins.nome} value={ins.id} />
-                      ))}
-                    </Picker>
-                  </View>
+                <View style={{ flex: 2, backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#e8e4de', justifyContent: 'center' }}>
+                  <Picker
+                    selectedValue={item.insumoId || ''}
+                    onValueChange={(val) => {
+                      const newFicha = [...fichasTecnicas];
+                      newFicha[index].insumoId = val;
+                      const chosen = insumos.find(i => i.id === val);
+                      if (chosen) {
+                        newFicha[index].name = chosen.nome;
+                        newFicha[index].unit = chosen.unidade;
+                      }
+                      setFichasTecnicas(newFicha);
+                    }}
+                    style={{ color: '#1c1f0f', transform: [{ scale: 0.85 }], height: 44 }}
+                  >
+                    <Picker.Item label="Selecione..." value="" enabled={false} color="#a0a29f" />
+                    {insumos.map(ins => (
+                      <Picker.Item key={ins.id} label={ins.nome} value={ins.id} />
+                    ))}
+                  </Picker>
+                </View>
                 <TextInput
                   value={item.quantity}
                   onChangeText={(text) => {
@@ -367,7 +367,7 @@ export default function CreateDrink() {
                 </TouchableOpacity>
               </View>
             ))}
-            
+
             {fichasTecnicas.length > 0 && (
               <View style={{ backgroundColor: 'rgba(120, 167, 100, 0.08)', borderRadius: 14, padding: 16, marginTop: 4, borderWidth: 1.5, borderColor: '#78a764', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '700' }}>Custo de Produção:</Text>

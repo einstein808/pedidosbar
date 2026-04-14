@@ -284,7 +284,7 @@ export default function ManageDrinksScreen() {
                 borderColor: isActive ? '#78a764' : '#c8cac6',
               }}
               resizeMode="cover"
-              onError={() => {}}
+              onError={() => { }}
             />
           ) : (
             <View
@@ -354,7 +354,7 @@ export default function ManageDrinksScreen() {
             {item.fichaTecnica && item.fichaTecnica.length > 0 && (
               <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(204, 158, 111, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 }}>
                 <Text style={{ color: '#ae7d4a', fontSize: 12, fontWeight: '800' }}>
-                   Custo R$ {calculateTotalCost(item.fichaTecnica).toFixed(2).replace('.', ',')}
+                  Custo R$ {calculateTotalCost(item.fichaTecnica).toFixed(2).replace('.', ',')}
                 </Text>
               </View>
             )}
@@ -705,8 +705,8 @@ export default function ManageDrinksScreen() {
                             newFicha[index].insumoId = val;
                             const chosen = insumos.find(i => i.id === val);
                             if (chosen) {
-                               newFicha[index].name = chosen.nome;
-                               newFicha[index].unit = chosen.unidade;
+                              newFicha[index].name = chosen.nome;
+                              newFicha[index].unit = chosen.unidade;
                             }
                             setFichasTecnicas(newFicha);
                           }}
@@ -747,7 +747,7 @@ export default function ManageDrinksScreen() {
                       </TouchableOpacity>
                     </View>
                   ))}
-                  
+
                   {fichasTecnicas.length > 0 && (
                     <View style={{ backgroundColor: 'rgba(120, 167, 100, 0.08)', borderRadius: 14, padding: 16, marginTop: 4, borderWidth: 1.5, borderColor: '#78a764', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '700' }}>Custo de Produção:</Text>
