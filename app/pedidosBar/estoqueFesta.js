@@ -79,11 +79,11 @@ export default function EstoqueFestaScreen() {
           }
         }
         // Nenhuma festa ativa encontrada
-        Alert.alert('Aviso', 'Nenhuma festa ativa encontrada! Vá em "Criar Festa" e crie ou ative uma festa.');
+        Alert.alert('Aviso', 'Nenhum evento ativo encontrado! Vá em "Gerenciar Eventos" e crie ou ative um evento.');
         router.back();
       } catch (err) {
-        console.error('Erro ao buscar festa ativa:', err);
-        Alert.alert('Erro', 'Não foi possível buscar a festa ativa.');
+        console.error('Erro ao buscar evento ativo:', err);
+        Alert.alert('Erro', 'Não foi possível buscar o evento ativo.');
         router.back();
       }
     };
@@ -189,7 +189,7 @@ export default function EstoqueFestaScreen() {
 
     Alert.alert(
       'Remover do Estoque',
-      `Remover ${nome} do estoque desta festa? (Não pode ser desfeito)`,
+      `Remover ${nome} do estoque deste evento? (Não pode ser desfeito)`,
       [
         { text: 'Cancelar', style: 'cancel' },
         { 
@@ -236,7 +236,7 @@ export default function EstoqueFestaScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F0EA', justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#cc9e6f" />
-        <Text style={{ color: '#1c1f0f', marginTop: 12, fontSize: 16, fontWeight: '600' }}>Carregando festa...</Text>
+        <Text style={{ color: '#1c1f0f', marginTop: 12, fontSize: 16, fontWeight: '600' }}>Carregando evento...</Text>
       </SafeAreaView>
     );
   }
@@ -262,14 +262,14 @@ export default function EstoqueFestaScreen() {
                   </TouchableOpacity>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Ionicons name="cube-outline" size={24} color="#cc9e6f" />
-                    <Text style={{ color: '#1c1f0f', fontSize: 22, fontWeight: '700' }}>Estoque da Festa</Text>
+                    <Text style={{ color: '#1c1f0f', fontSize: 22, fontWeight: '700' }}>Estoque do Evento</Text>
                   </View>
                   <View style={{ width: 42 }} />
                 </View>
                 
                 {festaSelecionada?.nome && (
                   <View style={{ backgroundColor: '#1c1f0f', borderRadius: 12, padding: 12, marginBottom: 20, alignItems: 'center' }}>
-                    <Text style={{ color: '#cc9e6f', fontWeight: '700', fontSize: 16 }}>Festa: {festaSelecionada.nome}</Text>
+                    <Text style={{ color: '#cc9e6f', fontWeight: '700', fontSize: 16 }}>Evento: {festaSelecionada.nome}</Text>
                   </View>
                 )}
               </Animated.View>
@@ -350,7 +350,7 @@ export default function EstoqueFestaScreen() {
                   </Modal>
 
                   <View style={{ marginBottom: 20 }}>
-                    <Text style={labelStyle}>Volume/Qtd TOTAL Trazida p/ Festa</Text>
+                    <Text style={labelStyle}>Volume/Qtd TOTAL Trazida p/ Evento</Text>
                     <Text style={{ fontSize: 11, color: '#a0a29f', marginLeft: 4, marginBottom: 6 }}>
                       Ex: Trouxe 5 garrafas de 1000ml de Vodka. Digite: 5000.
                     </Text>
@@ -432,7 +432,7 @@ export default function EstoqueFestaScreen() {
             <View style={{ alignItems: 'center', marginTop: 20 }}>
               <Ionicons name="cube-outline" size={48} color="#e8e4de" />
               <Text style={{ color: '#c8cac6', fontSize: 14, textAlign: 'center', marginTop: 12 }}>
-                Nenhum estoque lançado para esta festa ainda.
+                Nenhum estoque lançado para este evento ainda.
               </Text>
             </View>
           }

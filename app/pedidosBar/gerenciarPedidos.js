@@ -398,7 +398,7 @@ export default function GerenciarPedidosScreen() {
   const partyId = party?.id || party?.uid;
 
   const orders = mergedOrders
-    .filter(order => !partyId || order.partyId === partyId)
+    .filter(order => order.source === 'rua' || !partyId || order.partyId === partyId)
     .map(order => ({
       ...order,
       clientInfo: (order.clienteId && clientsCache[order.clienteId]) ? clientsCache[order.clienteId] : {}
@@ -688,6 +688,12 @@ export default function GerenciarPedidosScreen() {
                     {item.numeroPedido ? `#${item.numeroPedido} - ` : ''}{item.clientInfo?.name || item.nome || 'Desconhecido'}
                   </Text>
                   {item.source === 'vip' && <Ionicons name="star" size={14} color="#d4a017" />}
+                  {item.source === 'rua' && (
+                    <View style={{ backgroundColor: 'rgba(30, 130, 76, 0.15)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Ionicons name="storefront-outline" size={10} color="#1e824c" />
+                      <Text style={{ color: '#1e824c', fontSize: 9, fontWeight: '800' }}>RUA</Text>
+                    </View>
+                  )}
                   {item.isP2P && (
                     <View style={{ backgroundColor: 'rgba(91, 155, 213, 0.15)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                       <Ionicons name="wifi" size={10} color="#5b9bd5" />
@@ -701,6 +707,14 @@ export default function GerenciarPedidosScreen() {
                     </View>
                   )}
                 </View>
+                {item.source === 'rua' && item.totalValue != null && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                    <Ionicons name="pricetag-outline" size={12} color="#1e824c" />
+                    <Text style={{ color: '#1e824c', fontSize: 13, fontWeight: '800' }}>
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.totalValue)}
+                    </Text>
+                  </View>
+                )}
                 {item.updatedAt && (
                   <Text style={{ color: '#c8cac6', fontSize: 11, marginTop: 2 }}>
                     Atualizado: {new Date(item.updatedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}

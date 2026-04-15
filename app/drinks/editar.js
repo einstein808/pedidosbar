@@ -37,6 +37,7 @@ export default function ManageDrinksScreen() {
   const [image, setImage] = useState('');
   const [fichasTecnicas, setFichasTecnicas] = useState([]);
   const [insumos, setInsumos] = useState([]);
+  const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const db = getDatabase(app);
   const router = useRouter();
@@ -114,6 +115,7 @@ export default function ManageDrinksScreen() {
     setType(drink.type || '');
     setImage(drink.image || '');
     setFichasTecnicas(drink.fichaTecnica || []);
+    setPrice(drink.price != null ? String(drink.price).replace('.', ',') : '');
     setEditModalVisible(true);
   };
 
@@ -125,6 +127,7 @@ export default function ManageDrinksScreen() {
     setType('');
     setImage('');
     setFichasTecnicas([]);
+    setPrice('');
     setSaving(false);
   };
 
@@ -141,6 +144,7 @@ export default function ManageDrinksScreen() {
         await withTimeout(remove(oldRef), 4000);
       }
       const drinksRef = ref(db, 'drinks/' + name);
+      const parsedPrice = price ? parseFloat(price.replace(',', '.')) : null;
       await withTimeout(set(drinksRef, {
         name,
         ingredients,
@@ -148,6 +152,7 @@ export default function ManageDrinksScreen() {
         image,
         inactive: selectedDrink?.inactive || false,
         fichaTecnica: fichasTecnicas,
+        price: parsedPrice,
       }), 4000);
       Alert.alert('Sucesso', 'Drink atualizado com sucesso!');
       closeModal();
@@ -763,12 +768,22 @@ export default function ManageDrinksScreen() {
                 </View>
 
                 {/* URL Imagem */}
-                <View style={{ marginBottom: 24 }}>
+                <View style={{ marginBottom: 16 }}>
                   <Text style={labelStyle}>URL da Imagem</Text>
                   <View style={inputStyle}>
                     <Ionicons name="image-outline" size={18} color="#cc9e6f" style={{ marginRight: 12 }} />
                     <TextInput value={image} onChangeText={setImage} placeholder="https://..." placeholderTextColor="#c8cac6" style={{ flex: 1, color: '#1c1f0f', fontSize: 15 }} keyboardType="url" autoCapitalize="none" />
                   </View>
+                </View>
+
+                {/* Preço de Venda */}
+                <View style={{ marginBottom: 24 }}>
+                  <Text style={labelStyle}>Preço de Venda (R$) — Opcional</Text>
+                  <View style={inputStyle}>
+                    <Ionicons name="pricetag-outline" size={18} color="#78a764" style={{ marginRight: 12 }} />
+                    <TextInput value={price} onChangeText={setPrice} placeholder="Ex: 25,00" placeholderTextColor="#c8cac6" style={{ flex: 1, color: '#1c1f0f', fontSize: 15 }} keyboardType="decimal-pad" />
+                  </View>
+                  <Text style={{ color: '#a0a29f', fontSize: 11, marginLeft: 4, marginTop: 6 }}>Usado no modo Venda de Rua. Festas não exibem preço.</Text>
                 </View>
 
                 {/* Botões */}

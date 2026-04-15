@@ -45,8 +45,8 @@ export default function Home() {
     },
     {
       href: "/pedidosBar/festa",
-      label: "Criar Festa",
-      desc: "Iniciar um novo evento",
+      label: "Gerenciar Eventos",
+      desc: "Criar festas, vendas de rua e eventos",
       icon: "sparkles",
       bg: '#78a764',
       iconBg: 'rgba(255, 255, 255, 0.25)',
@@ -67,7 +67,7 @@ export default function Home() {
     },
     {
       href: "/pedidosBar/estoqueFesta",
-      label: "Estoque da Festa",
+      label: "Estoque do Evento",
       desc: "Controlar e dar baixa de bebidas",
       icon: "cube",
       bg: '#1c1f0f',
@@ -89,7 +89,7 @@ export default function Home() {
     },
     {
       href: "/pedidosBar/relatorioFesta",
-      label: "Fechamento de Festa",
+      label: "Fechamento de Evento",
       desc: "Lucro, despesas e relatórios",
       icon: "bar-chart",
       bg: '#cc9e6f',

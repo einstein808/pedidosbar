@@ -14,7 +14,7 @@ export default function PartyManagementScreen() {
   const selectParty = useAppStore(s => s.setFestaSelecionada);
   const party = useAppStore(s => s.festaSelecionada);
   const context = { selectParty, party };
-  const PARTY_TYPES = ['Casamento', '15 Anos', 'Formatura', 'Corporativo', 'Aniversário', 'Outros'];
+  const PARTY_TYPES = ['Casamento', '15 Anos', 'Formatura', 'Corporativo', 'Aniversário', 'Venda de Rua', 'Outros'];
 
   const [parties, setParties] = useState([]);
   const [newPartyName, setNewPartyName] = useState('');
@@ -54,15 +54,29 @@ export default function PartyManagementScreen() {
   useEffect(() => {
     const db = getDatabase(app);
     const festasRef = ref(db, 'festas');
-    onValue(festasRef, (snapshot) => {
+    const unsubscribe = onValue(festasRef, (snapshot) => {
       const data = snapshot.val();
-      const partiesList = data
-        ? Object.keys(data).map(key => ({ id: key, ...data[key] }))
-        : [];
+      if (!data) { setParties([]); return; }
+      const partiesList = Object.keys(data).map(key => {
+        const raw = data[key] || {};
+        return {
+          id: key,
+          uid: raw.uid || key,
+          nome: raw.nome || 'Sem nome',
+          data: raw.data || '',
+          tipoFesta: raw.tipoFesta || '',
+          status: raw.status || 'pendente',
+          quantidadeConvidados: raw.quantidadeConvidados || 0,
+          pacote: raw.pacote || {},
+          custoMaoDeObra: raw.custoMaoDeObra || 0,
+          timestamp: raw.timestamp || '',
+        };
+      });
       setParties(partiesList);
     }, (error) => {
-      Alert.alert('Erro', 'Falha ao carregar festas: ' + error.message);
+      Alert.alert('Erro', 'Falha ao carregar eventos: ' + error.message);
     });
+    return () => unsubscribe();
   }, []);
 
   const isValidDate = (date) => /^\d{4}-\d{2}-\d{2}$/.test(date);
@@ -97,9 +111,9 @@ export default function PartyManagementScreen() {
       // But we can reset variables if needed or unmount.
       setNewPartyName('');
       setNewPartyDate('');
-      Alert.alert('Sucesso', 'Festa criada com sucesso!');
+      Alert.alert('Sucesso', 'Evento criado com sucesso!');
     } catch (error) {
-      Alert.alert('Erro', 'Erro ao criar festa: ' + error.message);
+      Alert.alert('Erro', 'Erro ao criar evento: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -130,7 +144,7 @@ export default function PartyManagementScreen() {
       if (context.party?.uid === editingParty.id) {
         selectParty({ ...editingParty, ...partyData });
       }
-      Alert.alert('Sucesso', 'Festa atualizada!');
+      Alert.alert('Sucesso', 'Evento atualizado!');
       setEditingParty(null);
     } catch (error) {
       Alert.alert('Erro', 'Erro ao atualizar: ' + error.message);
@@ -142,7 +156,7 @@ export default function PartyManagementScreen() {
   const deleteParty = (partyId) => {
     Alert.alert(
       'Confirmar Exclusão',
-      'Tem certeza que deseja excluir esta festa?',
+      'Tem certeza que deseja excluir este evento?',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -154,7 +168,7 @@ export default function PartyManagementScreen() {
               const partyRef = ref(db, `festas/${partyId}`);
               await remove(partyRef);
               if (context.party?.uid === partyId) selectParty(null);
-              Alert.alert('Sucesso', 'Festa excluída!');
+              Alert.alert('Sucesso', 'Evento excluído!');
             } catch (error) {
               Alert.alert('Erro', 'Erro ao excluir: ' + error.message);
             }
@@ -179,9 +193,9 @@ export default function PartyManagementScreen() {
       
       await update(ref(db), updates);
       selectParty({ ...party, status: 'ativa' });
-      Alert.alert('Sucesso', `Festa "${party.nome}" ativada globalmente! Todos os novos pedidos serão direcionados para ela.`);
+      Alert.alert('Sucesso', `Evento "${party.nome}" ativado globalmente! Todos os novos pedidos serão direcionados para ele.`);
     } catch (error) {
-      Alert.alert('Erro', 'Não foi possível ativar a festa: ' + error.message);
+      Alert.alert('Erro', 'Não foi possível ativar o evento: ' + error.message);
     }
   };
 
@@ -234,7 +248,7 @@ export default function PartyManagementScreen() {
               <Ionicons name="sparkles" size={24} color="#78a764" />
             </View>
             <Text style={{ color: '#1c1f0f', fontSize: 24, fontWeight: '700' }}>
-              Gerenciar Festas
+              Gerenciar Eventos
             </Text>
           </View>
         </Animated.View>
@@ -258,13 +272,13 @@ export default function PartyManagementScreen() {
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <Ionicons name="add-circle-outline" size={20} color="#78a764" />
-              <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Nova Festa</Text>
+              <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Novo Evento</Text>
             </View>
 
             <PartyForm 
               onSubmit={createParty} 
               loading={loading} 
-              submitLabel="Criar Festa" 
+              submitLabel="Criar Evento" 
             />
           </View>
         </Animated.View>
@@ -289,7 +303,7 @@ export default function PartyManagementScreen() {
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <Ionicons name="create-outline" size={20} color="#cc9e6f" />
-                <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Editar Festa</Text>
+                <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Editar Evento</Text>
               </View>
 
               <PartyForm 
@@ -306,7 +320,7 @@ export default function PartyManagementScreen() {
         {/* ===== LISTA DE FESTAS ===== */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
           <Ionicons name="list-outline" size={20} color="#1c1f0f" />
-          <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Festas Existentes</Text>
+          <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700' }}>Eventos Existentes</Text>
           <View style={{ backgroundColor: 'rgba(112, 123, 85, 0.12)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 }}>
             <Text style={{ color: '#707b55', fontSize: 13, fontWeight: '700' }}>{parties.length}</Text>
           </View>
@@ -317,8 +331,8 @@ export default function PartyManagementScreen() {
             <View style={{ backgroundColor: 'rgba(204, 158, 111, 0.1)', borderRadius: 50, padding: 24, marginBottom: 12 }}>
               <Ionicons name="sparkles-outline" size={40} color="#cc9e6f" />
             </View>
-            <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '500' }}>Nenhuma festa encontrada</Text>
-            <Text style={{ color: '#707b55', fontSize: 13, marginTop: 4 }}>Crie uma festa acima para começar</Text>
+            <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '500' }}>Nenhum evento encontrado</Text>
+            <Text style={{ color: '#707b55', fontSize: 13, marginTop: 4 }}>Crie um evento acima para começar</Text>
           </View>
         ) : (
           parties.map((item, index) => {
@@ -352,7 +366,7 @@ export default function PartyManagementScreen() {
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 14 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="calendar-outline" size={16} color="#cc9e6f" />
-                      <Text style={{ color: '#707b55', fontSize: 14 }}>{item.data}</Text>
+                      <Text style={{ color: '#707b55', fontSize: 14 }}>{item.data || 'Sem data'}</Text>
                     </View>
                     {item.tipoFesta && (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

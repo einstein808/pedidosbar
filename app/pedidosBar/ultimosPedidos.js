@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   FlatList,
   ScrollView,
@@ -66,6 +66,8 @@ export default function UltimosPedidosScreen() {
     loadCache();
   }, []);
 
+  const isInitialLoad = useRef(true);
+
   useEffect(() => {
     const db = getDatabase(app);
     const ordersRef = ref(db, 'pedidos');
@@ -112,6 +114,12 @@ export default function UltimosPedidosScreen() {
         cacheData(CACHE_KEYS.CLIENTES, clientsCache);
 
         setRawOrders((prevOrders) => {
+          // Skip takeover on first load to avoid alerting for pre-existing 'pronto' orders
+          if (isInitialLoad.current) {
+            isInitialLoad.current = false;
+            return enrichedOrders;
+          }
+
           const newProntos = {};
 
           enrichedOrders.forEach((order) => {
@@ -122,7 +130,6 @@ export default function UltimosPedidosScreen() {
             ) {
               newProntos[order.id] = true;
 
-              // Dispara o Takeover Full Screen se não for load inicial massivo (temos recentProntos length test? actually yes, but we will just trust the 1by1 addition)
               if (order.partyId === festaSelecionada?.id) {
                  setTakeoverOrder(order);
               }
@@ -396,7 +403,7 @@ export default function UltimosPedidosScreen() {
                 Últimos Pedidos
               </Text>
               <Text style={{ color: '#707b55', fontSize: 14, marginTop: 2 }}>
-                {orders.length} pedido{orders.length !== 1 ? 's' : ''} no total
+                {pendingOrdersFull.length + readyOrdersFull.length} pedido{(pendingOrdersFull.length + readyOrdersFull.length) !== 1 ? 's' : ''} no total
                 {isOffline ? ' (cache local)' : ''}
               </Text>
             </View>

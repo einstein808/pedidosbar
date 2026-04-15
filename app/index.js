@@ -11,8 +11,14 @@ export default function Home() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
 
+  // Double-tap detection
+  const lastTap = useRef(0);
+  const DOUBLE_TAP_DELAY = 400;
+
   const screensaverEnabled = useAppStore(s => s.screensaverEnabled);
   const setScreensaverEnabled = useAppStore(s => s.setScreensaverEnabled);
+  const streetMode = useAppStore(s => s.streetMode);
+  const setStreetMode = useAppStore(s => s.setStreetMode);
 
   const router = useRouter();
 
@@ -85,7 +91,15 @@ export default function Home() {
         {/* Logo (Com Toque Longo Secreto) */}
         <Animated.View entering={FadeInUp.duration(600)} className="items-center mb-12 z-10 mt-8">
           <Pressable
-            onPress={() => { }}
+            onPress={() => {
+              const now = Date.now();
+              if (now - lastTap.current < DOUBLE_TAP_DELAY) {
+                setStreetMode(prev => !prev);
+                lastTap.current = 0;
+              } else {
+                lastTap.current = now;
+              }
+            }}
             onLongPress={() => setShowAdminModal(true)}
             delayLongPress={1500}
             style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
@@ -106,12 +120,58 @@ export default function Home() {
             </View>
           </Pressable>
           <Text className="text-barolive text-[15px] mt-3 text-center leading-[22px] max-w-[260px]">
-            Bem-vindo! Realize o seu pedido utilizando o nosso autoatendimento.
+            {streetMode
+              ? 'Modo Venda de Rua ativado. Toque duas vezes no logo para voltar.'
+              : 'Bem-vindo! Realize o seu pedido utilizando o nosso autoatendimento.'
+            }
           </Text>
+          {streetMode && (
+            <View style={{ backgroundColor: 'rgba(30, 130, 76, 0.12)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 6, marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="storefront-outline" size={14} color="#1e824c" />
+              <Text style={{ color: '#1e824c', fontSize: 12, fontWeight: '800' }}>MODO RUA</Text>
+            </View>
+          )}
         </Animated.View>
 
         {/* Botões do Cliente (3 opções) */}
         <Animated.View entering={FadeInUp.duration(500).delay(200)} className="w-full gap-4 z-10 pb-8">
+
+          {streetMode ? (
+            /* ===== MODO VENDA DE RUA ===== */
+            <>
+              <TouchableOpacity activeOpacity={0.8} className="w-full" onPress={() => router.push('/vendaRua')}>
+                <View
+                  className="flex-row items-center rounded-[20px] p-5 gap-4 shadow-xl"
+                  style={{ backgroundColor: '#1e824c', elevation: 8 }}
+                >
+                  <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 16, padding: 16 }}>
+                    <Ionicons name="storefront-outline" size={32} color="#FFFFFF" />
+                  </View>
+                  <View className="flex-1">
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 20, letterSpacing: -0.3 }}>
+                      Iniciar Venda de Rua
+                    </Text>
+                    <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '500', lineHeight: 18 }}>
+                      Venda avulsa com preço. Para feiras, eventos e pop-ups.
+                    </Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setStreetMode(false)}
+                style={{ alignItems: 'center', paddingVertical: 12 }}
+              >
+                <Text style={{ color: '#707b55', fontSize: 14, fontWeight: '600' }}>
+                  ← Voltar ao modo normal
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            /* ===== MODO NORMAL (FESTA) ===== */
+            <>
 
           {/* Opção 1: Convidado Sem Cadastro */}
           <TouchableOpacity activeOpacity={0.8} className="w-full" onPress={() => router.push('/pedidosBar?mode=guest')}>
@@ -181,6 +241,9 @@ export default function Home() {
               <Ionicons name="chevron-forward" size={24} color="#1c1f0f" />
             </View>
           </TouchableOpacity>
+
+            </>
+          )}
 
         </Animated.View>
       </View>

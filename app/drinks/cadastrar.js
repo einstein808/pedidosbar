@@ -31,6 +31,7 @@ export default function CreateDrink() {
   const [fichasTecnicas, setFichasTecnicas] = useState([]);
   const [insumos, setInsumos] = useState([]);
   const [type, setType] = useState('');
+  const [price, setPrice] = useState('');
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
@@ -71,7 +72,8 @@ export default function CreateDrink() {
     }
 
     setSaving(true);
-    const drinkData = { name, ingredients, type, image, fichaTecnica: fichasTecnicas };
+    const parsedPrice = price ? parseFloat(price.replace(',', '.')) : null;
+    const drinkData = { name, ingredients, type, image, fichaTecnica: fichasTecnicas, price: parsedPrice };
 
     try {
       if (isOffline) {
@@ -93,6 +95,7 @@ export default function CreateDrink() {
         setIngredients('');
         setFichasTecnicas([]);
         setType('');
+        setPrice('');
         setImage('');
       } else {
         const db = getDatabase(app);
@@ -104,6 +107,7 @@ export default function CreateDrink() {
         setIngredients('');
         setFichasTecnicas([]);
         setType('');
+        setPrice('');
         setImage('');
       }
     } catch (error) {
@@ -125,6 +129,7 @@ export default function CreateDrink() {
         setIngredients('');
         setFichasTecnicas([]);
         setType('');
+        setPrice('');
         setImage('');
       } else {
         Alert.alert('Erro', 'Erro ao salvar o drink: ' + error.message);
@@ -386,7 +391,7 @@ export default function CreateDrink() {
           {/* Campo URL da Imagem */}
           <Animated.View entering={FadeInUp.duration(500).delay(500)}>
             <Text style={labelStyle}>URL da Imagem</Text>
-            <View style={{ ...inputStyle, marginBottom: 28 }}>
+            <View style={{ ...inputStyle, marginBottom: 16 }}>
               <Ionicons name="image-outline" size={18} color="#cc9e6f" style={{ marginRight: 12 }} />
               <TextInput
                 value={image}
@@ -398,6 +403,25 @@ export default function CreateDrink() {
                 autoCapitalize="none"
               />
             </View>
+          </Animated.View>
+
+          {/* Campo Preço de Venda */}
+          <Animated.View entering={FadeInUp.duration(500).delay(550)}>
+            <Text style={labelStyle}>Preço de Venda (R$) — Opcional</Text>
+            <View style={{ ...inputStyle, marginBottom: 28 }}>
+              <Ionicons name="pricetag-outline" size={18} color="#78a764" style={{ marginRight: 12 }} />
+              <TextInput
+                value={price}
+                onChangeText={setPrice}
+                placeholder="Ex: 25,00"
+                placeholderTextColor="#c8cac6"
+                style={{ flex: 1, color: '#1c1f0f', fontSize: 15 }}
+                keyboardType="decimal-pad"
+              />
+            </View>
+            <Text style={{ color: '#a0a29f', fontSize: 11, marginLeft: 4, marginTop: -22, marginBottom: 20 }}>
+              Usado apenas no modo Venda de Rua. Festas não exibem preço.
+            </Text>
           </Animated.View>
 
           {/* Botão Salvar */}

@@ -37,7 +37,11 @@ export const useAppStore = create(
 
       // Carrinho de drinks local
       selectedDrinks: [],
-      setSelectedDrinks: (drinks) => set({ selectedDrinks: drinks })
+      setSelectedDrinks: (drinks) => set({ selectedDrinks: drinks }),
+
+      // Modo venda de rua (session only, not persisted)
+      streetMode: false,
+      setStreetMode: (val) => set({ streetMode: val }),
     }),
     {
       name: '@barman_app_state',
