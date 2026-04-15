@@ -20,6 +20,7 @@ export default function VendaRuaResumoScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [drinksCatalog, setDrinksCatalog] = useState([]);
+  const festaSelecionada = useAppStore(s => s.festaSelecionada);
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -51,7 +52,8 @@ export default function VendaRuaResumoScreen() {
       clienteId: 'anonimo',
       nome: 'Venda de Rua',
       whatsapp: '',
-      partyId: null,
+      partyId: festaSelecionada?.id || null,
+      festaId: festaSelecionada?.id || null,
       drinks: selectedDrinks,
       source: 'rua',
       status: 'pendente',

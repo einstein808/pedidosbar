@@ -18,6 +18,7 @@ import { useCallback } from 'react';
 import { enqueueDrinkUpdate } from '../src/services/offlineQueue';
 import { setOnOrderReceived, isServerRunning, startLocalServer, broadcastOrderStatus } from '../src/services/localServer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { playNewOrderSound } from '../src/services/soundService';
 
 export default function GerenciarPedidosScreen() {
   const [rawOrders, setRawOrders] = useState([]);
@@ -155,10 +156,18 @@ export default function GerenciarPedidosScreen() {
         const data = snapshot.val();
         if (data) {
           const ordersList = Object.keys(data).map((key) => ({ id: key, ...data[key] }));
+          // Detect new orders and play sound
+          if (cacheLoaded.current) {
+            const prevIds = new Set(rawOrders.map(o => o.id));
+            const newPending = ordersList.filter(o => o.status === 'pendente' && !prevIds.has(o.id));
+            if (newPending.length > 0) {
+              playNewOrderSound();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            }
+          }
           setRawOrders(ordersList);
           cacheData(CACHE_KEYS.PEDIDOS, ordersList);
         } else if (!isOffline) {
-          // Só zera se realmente estiver online (significa que não há pedidos no Firebase)
           setRawOrders([]);
           cacheData(CACHE_KEYS.PEDIDOS, []);
         }
@@ -398,7 +407,7 @@ export default function GerenciarPedidosScreen() {
   const partyId = party?.id || party?.uid;
 
   const orders = mergedOrders
-    .filter(order => order.source === 'rua' || !partyId || order.partyId === partyId)
+    .filter(order => !partyId || order.partyId === partyId || order.festaId === partyId)
     .map(order => ({
       ...order,
       clientInfo: (order.clienteId && clientsCache[order.clienteId]) ? clientsCache[order.clienteId] : {}

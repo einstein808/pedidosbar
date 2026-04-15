@@ -12,11 +12,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { app } from '../src/config/firebaseConfig';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeIn, ZoomIn, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence } from 'react-native-reanimated';
 import OfflineBanner from '../src/components/atoms/OfflineBanner';
 import { useNetworkStore } from '../src/store/useNetworkStore';
 import { useAppStore } from '../src/store/useAppStore';
 import { cacheData, getCachedData, CACHE_KEYS } from '../src/services/offlineCache';
+import { playOrderReadySound, playNewOrderSound } from '../src/services/soundService';
+import * as Haptics from 'expo-haptics';
 
 export default function UltimosPedidosScreen() {
   const [rawOrders, setRawOrders] = useState([]);
@@ -25,6 +27,7 @@ export default function UltimosPedidosScreen() {
   const [recentProntos, setRecentProntos] = useState({});
   const [takeoverOrder, setTakeoverOrder] = useState(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [now, setNow] = useState(Date.now());
   const router = useRouter();
   const isOffline = useNetworkStore(s => s.isOffline);
   const offlineQueueCount = useNetworkStore(s => s.offlineQueueCount);
@@ -134,6 +137,10 @@ export default function UltimosPedidosScreen() {
                  setTakeoverOrder(order);
               }
 
+              // Sound + Haptic
+              playOrderReadySound();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
               setTimeout(() => {
                 setRecentProntos((prev) => {
                   const updated = { ...prev };
@@ -166,13 +173,20 @@ export default function UltimosPedidosScreen() {
   })();
 
   const partyId = festaSelecionada?.id || festaSelecionada?.uid;
+  const isRuaEvent = festaSelecionada?.tipoFesta === 'Venda de Rua';
+
+  const matchesParty = (order) => {
+    if (!partyId) return true;
+    if (order.partyId === partyId || order.festaId === partyId) return true;
+    return false;
+  };
 
   const pendingOrdersFull = orders
-    .filter((order) => order.status === 'pendente' && (!partyId || order.partyId === partyId))
+    .filter((order) => order.status === 'pendente' && matchesParty(order))
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   const readyOrdersFull = orders
-    .filter((order) => order.status === 'pronto' && (!partyId || order.partyId === partyId))
+    .filter((order) => order.status === 'pronto' && matchesParty(order))
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   const maxPages = Math.max(1, Math.ceil(Math.max(pendingOrdersFull.length, readyOrdersFull.length) / 5));
@@ -184,6 +198,12 @@ export default function UltimosPedidosScreen() {
     return () => clearInterval(timer);
   }, [maxPages]);
 
+  // Clock tick for countdown timers
+  useEffect(() => {
+    const clockTimer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(clockTimer);
+  }, []);
+
   const pendingOrders = pendingOrdersFull.slice(pageIndex * 5, pageIndex * 5 + 5);
   const readyOrders = readyOrdersFull.slice(pageIndex * 5, pageIndex * 5 + 5);
 
@@ -191,6 +211,14 @@ export default function UltimosPedidosScreen() {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const getReadyAgo = (timestamp) => {
+    if (!timestamp) return '';
+    const diff = Math.floor((now - new Date(timestamp).getTime()) / 60000);
+    if (diff < 1) return 'agora';
+    if (diff === 1) return 'há 1 min';
+    return `há ${diff} min`;
   };
 
   const totalDrinksInOrder = (drinks) => {
@@ -253,6 +281,11 @@ export default function UltimosPedidosScreen() {
                     <Text style={{ color: '#707b55', fontSize: 12, fontWeight: '500' }}>
                       {formatTime(item.timestamp)}
                     </Text>
+                    {isReady && (
+                      <Text style={{ color: '#78a764', fontSize: 11, fontWeight: '700', marginLeft: 6 }}>
+                        {getReadyAgo(item.timestamp)}
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>
@@ -473,22 +506,30 @@ export default function UltimosPedidosScreen() {
       {/* TAKEOVER DE TELA INTEIRA (FLASH) */}
       {takeoverOrder && (
         <Animated.View 
-          entering={FadeInUp.duration(300).springify()}
+          entering={FadeIn.duration(200)}
           style={[StyleSheet.absoluteFillObject, { backgroundColor: '#78a764', zIndex: 9999, justifyContent: 'center', alignItems: 'center', padding: 24 }]}
         >
-           <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 32, borderRadius: 100, marginBottom: 30 }}>
+           <Animated.View entering={ZoomIn.duration(500).springify()} style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 32, borderRadius: 100, marginBottom: 30 }}>
              <Ionicons name="checkmark-done-circle" size={120} color="#FFF" />
-           </View>
+           </Animated.View>
            
-           <Text style={{ color: '#FFF', fontSize: 36, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase', marginBottom: 16 }}>
-             {getMaskedClientString(takeoverOrder).toUpperCase()},
-           </Text>
-           <Text style={{ color: '#FFF', fontSize: 38, fontWeight: '900', textAlign: 'center', lineHeight: 46 }}>
+           {takeoverOrder.numeroPedido && (
+             <Animated.View entering={FadeInUp.duration(400).delay(200)} style={{ backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 24, paddingHorizontal: 40, paddingVertical: 16, marginBottom: 20 }}>
+               <Text style={{ color: '#FFF', fontSize: 56, fontWeight: '900', textAlign: 'center' }}>
+                 #{takeoverOrder.numeroPedido}
+               </Text>
+             </Animated.View>
+           )}
+           
+           <Animated.Text entering={FadeInUp.duration(400).delay(300)} style={{ color: '#FFF', fontSize: 30, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase', marginBottom: 12 }}>
+             {getMaskedClientString(takeoverOrder).toUpperCase()}
+           </Animated.Text>
+           <Animated.Text entering={FadeInUp.duration(400).delay(400)} style={{ color: '#FFF', fontSize: 38, fontWeight: '900', textAlign: 'center', lineHeight: 46 }}>
              SEU PEDIDO ESTÁ PRONTO!
-           </Text>
-           <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 20, fontWeight: '600', marginTop: 40, textAlign: 'center' }}>
-             (Retire no balcão)
-           </Text>
+           </Animated.Text>
+           <Animated.Text entering={FadeInUp.duration(400).delay(500)} style={{ color: 'rgba(255,255,255,0.8)', fontSize: 20, fontWeight: '600', marginTop: 40, textAlign: 'center' }}>
+             🍸 Retire no balcão
+           </Animated.Text>
         </Animated.View>
       )}
     </SafeAreaView>
