@@ -14,7 +14,9 @@ const { width } = Dimensions.get('window');
 export default function InsightsScreen() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState(null);
+  const [ruaMetrics, setRuaMetrics] = useState(null);
   const [selectedPartyDetail, setSelectedPartyDetail] = useState(null);
+  const [activeTab, setActiveTab] = useState('eventos');
   const router = useRouter();
   const db = getDatabase(app);
 
@@ -29,7 +31,8 @@ export default function InsightsScreen() {
     const processMetrics = () => {
       if (!festasLoaded || !pedidosLoaded || !insumosLoaded) return;
 
-      const closedParties = rawFestas.filter(f => f.fechamento);
+      const closedParties = rawFestas.filter(f => f.fechamento && f.tipoFesta !== 'Venda de Rua');
+      const closedRuaParties = rawFestas.filter(f => f.fechamento && f.tipoFesta === 'Venda de Rua');
 
       let totalReceita = 0;
       let totalLucro = 0;
@@ -195,6 +198,87 @@ export default function InsightsScreen() {
         pieData: pieData.filter(d => d.population > 0).sort((a,b) => b.population - a.population),
         custoOperacaoGlobal
       });
+
+      // === STREET SALES METRICS ===
+      let ruaTotalReceita = 0;
+      let ruaTotalLucro = 0;
+      let ruaTotalPedidos = 0;
+      let ruaDrinkCounts = {};
+      let ruaHoraMap = {};
+      let ruaPartyStats = [];
+
+      closedRuaParties.forEach(party => {
+        const fech = party.fechamento;
+        const rec = parseFloat(fech.receita) || 0;
+        const luc = parseFloat(fech.lucroLiquidoConsolidado) || 0;
+        const pedidosCount = parseFloat(fech.totalPedidosRua) || 0;
+        ruaTotalReceita += rec;
+        ruaTotalLucro += luc;
+        ruaTotalPedidos += pedidosCount;
+
+        ruaPartyStats.push({
+          id: party.id,
+          nome: party.nome || 'Venda Rua',
+          data: party.data || party.timestamp,
+          receita: rec,
+          lucro: luc,
+          pedidos: pedidosCount,
+          ticketMedio: pedidosCount > 0 ? rec / pedidosCount : 0,
+          margem: rec > 0 ? (luc / rec) * 100 : 0,
+        });
+      });
+
+      // Drinks & hour data from orders linked to rua parties
+      const ruaPartyIds = closedRuaParties.map(p => p.id);
+      const ruaPedidos = rawPedidos.filter(p =>
+        (ruaPartyIds.includes(p.partyId) || ruaPartyIds.includes(p.festaId)) &&
+        p.status !== 'cancelado'
+      );
+
+      ruaPedidos.forEach(pedido => {
+        // Hour tracking
+        const ts = pedido.timestamp || pedido.createdAt;
+        if (ts) {
+          const hour = new Date(ts).getHours();
+          ruaHoraMap[hour] = (ruaHoraMap[hour] || 0) + 1;
+        }
+        // Drink tracking
+        if (pedido.drinks && Array.isArray(pedido.drinks)) {
+          pedido.drinks.forEach(drink => {
+            const name = drink.drinkName || 'Desconhecido';
+            const qty = parseFloat(drink.quantity) || 0;
+            ruaDrinkCounts[name] = (ruaDrinkCounts[name] || 0) + qty;
+          });
+        }
+      });
+
+      const ruaTopDrinks = Object.entries(ruaDrinkCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count]) => ({ name, count }));
+
+      const ruaHoraPico = Object.entries(ruaHoraMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([hour, count]) => ({ hour: parseInt(hour), count }));
+
+      const ruaMargemMedia = ruaTotalReceita > 0 ? (ruaTotalLucro / ruaTotalReceita) * 100 : 0;
+      const ruaTicketMedioGlobal = ruaTotalPedidos > 0 ? ruaTotalReceita / ruaTotalPedidos : 0;
+
+      const ruaTopEventos = [...ruaPartyStats].sort((a, b) => b.receita - a.receita).slice(0, 5);
+
+      setRuaMetrics({
+        eventosFechados: closedRuaParties.length,
+        totalReceita: ruaTotalReceita,
+        totalLucro: ruaTotalLucro,
+        totalPedidos: ruaTotalPedidos,
+        ticketMedioGlobal: ruaTicketMedioGlobal,
+        margemMedia: ruaMargemMedia,
+        topDrinks: ruaTopDrinks,
+        horaPico: ruaHoraPico,
+        topEventos: ruaTopEventos,
+      });
+
       setLoading(false);
     };
 
@@ -249,18 +333,27 @@ export default function InsightsScreen() {
     );
   }
 
-  if (metrics.eventosFechados === 0) {
+  if ((activeTab === 'eventos' && metrics.eventosFechados === 0) || (activeTab === 'rua' && (!ruaMetrics || ruaMetrics.eventosFechados === 0))) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F0EA' }}>
         <View style={{ padding: 20 }}>
           <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: '#FFFFFF', alignSelf: 'flex-start', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: '#c8cac6', marginBottom: 20 }}>
             <Ionicons name="arrow-back" size={22} color="#1c1f0f" />
           </TouchableOpacity>
+          {/* Tab Switcher */}
+          <View style={{ flexDirection: 'row', backgroundColor: '#e8e4de', borderRadius: 14, padding: 4, marginBottom: 20 }}>
+            <TouchableOpacity onPress={() => setActiveTab('eventos')} style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: activeTab === 'eventos' ? '#FFFFFF' : 'transparent', alignItems: 'center' }}>
+              <Text style={{ color: activeTab === 'eventos' ? '#1c1f0f' : '#707b55', fontWeight: activeTab === 'eventos' ? '700' : '500', fontSize: 14 }}>🎉 Eventos</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setActiveTab('rua')} style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: activeTab === 'rua' ? '#FFFFFF' : 'transparent', alignItems: 'center' }}>
+              <Text style={{ color: activeTab === 'rua' ? '#1c1f0f' : '#707b55', fontWeight: activeTab === 'rua' ? '700' : '500', fontSize: 14 }}>🛒 Venda de Rua</Text>
+            </TouchableOpacity>
+          </View>
           <View style={{ alignItems: 'center', marginTop: 40, opacity: 0.6 }}>
             <Ionicons name="pie-chart-outline" size={64} color="#cc9e6f" />
             <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '700', marginTop: 16 }}>Nenhum Dado Consolidado</Text>
             <Text style={{ color: '#707b55', fontSize: 14, textAlign: 'center', marginTop: 8 }}>
-              Você precisa realizar o 'Fechamento de Festa' de pelo menos um evento para gerar relatórios de B.I.
+              Você precisa realizar o 'Fechamento de Evento' de pelo menos um {activeTab === 'rua' ? 'evento de venda de rua' : 'evento'} para gerar relatórios.
             </Text>
           </View>
         </View>
@@ -271,9 +364,9 @@ export default function InsightsScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F0EA' }}>
       
-      {/* Header Fixo */}
+      {/* Tab Switcher */}
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16, borderBottomWidth: 1, borderColor: '#e8e4de', backgroundColor: '#FFFFFF', zIndex: 10 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: '#F5F0EA', borderRadius: 12, padding: 10 }}>
             <Ionicons name="arrow-back" size={22} color="#1c1f0f" />
           </TouchableOpacity>
@@ -283,9 +376,149 @@ export default function InsightsScreen() {
           </View>
           <View style={{ width: 42 }} />
         </View>
+        <View style={{ flexDirection: 'row', backgroundColor: '#e8e4de', borderRadius: 14, padding: 4 }}>
+          <TouchableOpacity onPress={() => setActiveTab('eventos')} style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: activeTab === 'eventos' ? '#FFFFFF' : 'transparent', alignItems: 'center', shadowColor: activeTab === 'eventos' ? '#000' : 'transparent', shadowOpacity: 0.08, shadowRadius: 4, elevation: activeTab === 'eventos' ? 2 : 0 }}>
+            <Text style={{ color: activeTab === 'eventos' ? '#1c1f0f' : '#707b55', fontWeight: activeTab === 'eventos' ? '800' : '500', fontSize: 14 }}>🎉 Eventos</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setActiveTab('rua')} style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: activeTab === 'rua' ? '#FFFFFF' : 'transparent', alignItems: 'center', shadowColor: activeTab === 'rua' ? '#000' : 'transparent', shadowOpacity: 0.08, shadowRadius: 4, elevation: activeTab === 'rua' ? 2 : 0 }}>
+            <Text style={{ color: activeTab === 'rua' ? '#1c1f0f' : '#707b55', fontWeight: activeTab === 'rua' ? '800' : '500', fontSize: 14 }}>🛒 Venda de Rua</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}>
+
+        {activeTab === 'rua' && ruaMetrics ? (
+          <>
+            {/* BARÔMETRO RUA */}
+            <Animated.View entering={FadeInUp.duration(500)}>
+              <View style={{ backgroundColor: '#1c1f0f', borderRadius: 24, padding: 24, marginBottom: 20, shadowColor: '#1c1f0f', shadowOpacity: 0.3, shadowRadius: 16, elevation: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                  <Ionicons name="storefront-outline" size={18} color="#cc9e6f" />
+                  <Text style={{ color: '#cc9e6f', fontSize: 13, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Venda de Rua</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20 }}>
+                  <View>
+                    <Text style={{ color: '#c8cac6', fontSize: 13, marginBottom: 4 }}>Lucro Total de Rua</Text>
+                    <Text style={{ color: '#78a764', fontSize: 28, fontWeight: '800' }}>{formatCurrency(ruaMetrics.totalLucro)}</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(120, 167, 100, 0.15)', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ color: '#78a764', fontSize: 16, fontWeight: '800' }}>+{formatNum(ruaMetrics.margemMedia)}%</Text>
+                  </View>
+                </View>
+                <View style={{ height: 1, backgroundColor: 'rgba(255, 255, 255, 0.1)', marginBottom: 16 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ color: '#c8cac6', fontSize: 12 }}>Receita Total</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '600' }}>{formatCurrency(ruaMetrics.totalReceita)}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center' }}>
+                    <Text style={{ color: '#c8cac6', fontSize: 12 }}>Pedidos</Text>
+                    <Text style={{ color: '#cc9e6f', fontSize: 16, fontWeight: '600' }}>{ruaMetrics.totalPedidos}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={{ color: '#c8cac6', fontSize: 12 }}>Eventos</Text>
+                    <Text style={{ color: '#cc9e6f', fontSize: 16, fontWeight: '600' }}>{ruaMetrics.eventosFechados}</Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+
+            {/* TICKET MÉDIO + MARGEM */}
+            <View style={{ flexDirection: 'row', gap: 14, marginBottom: 20 }}>
+              <Animated.View entering={FadeInUp.duration(500).delay(100)} style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1.5, borderColor: '#c8cac6' }}>
+                <Ionicons name="pricetag-outline" size={24} color="#cc9e6f" style={{ marginBottom: 8 }} />
+                <Text style={{ color: '#1c1f0f', fontSize: 24, fontWeight: '800' }}>{formatCurrency(ruaMetrics.ticketMedioGlobal)}</Text>
+                <Text style={{ color: '#707b55', fontSize: 13, fontWeight: '600', marginTop: 4 }}>Ticket Médio{'\n'}por Pedido</Text>
+              </Animated.View>
+              <Animated.View entering={FadeInUp.duration(500).delay(200)} style={{ flex: 1, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, borderWidth: 1.5, borderColor: '#c8cac6' }}>
+                <Ionicons name="trending-up" size={24} color="#78a764" style={{ marginBottom: 8 }} />
+                <Text style={{ color: '#1c1f0f', fontSize: 24, fontWeight: '800' }}>{formatNum(ruaMetrics.margemMedia)}%</Text>
+                <Text style={{ color: '#707b55', fontSize: 13, fontWeight: '600', marginTop: 4 }}>Margem Média{'\n'}de Lucro</Text>
+              </Animated.View>
+            </View>
+
+            {/* TOP DRINKS DE RUA */}
+            <Animated.View entering={FadeInUp.duration(500).delay(250)}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 20, borderWidth: 1.5, borderColor: '#c8cac6' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Ionicons name="trophy" size={20} color="#e5a93d" />
+                  <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '800' }}>Drinks Mais Vendidos (Rua)</Text>
+                </View>
+                {ruaMetrics.topDrinks.length > 0 ? (
+                  ruaMetrics.topDrinks.map((drink, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: index === ruaMetrics.topDrinks.length -1 ? 0 : 14 }}>
+                      <View style={{ width: 28, height: 28, backgroundColor: index === 0 ? '#e5a93d' : (index === 1 ? '#c0c0c0' : '#cd7f32'), borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                        <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 14 }}>{index + 1}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '700' }}>{drink.name}</Text>
+                        <View style={{ width: '100%', height: 4, backgroundColor: '#F5F0EA', borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
+                          <View style={{ width: `${Math.min((drink.count / ruaMetrics.topDrinks[0].count) * 100, 100)}%`, height: '100%', backgroundColor: index === 0 ? '#e5a93d' : '#888' }} />
+                        </View>
+                      </View>
+                      <Text style={{ color: '#707b55', fontSize: 15, fontWeight: '700', marginLeft: 16 }}>{drink.count} un</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={{ color: '#707b55', fontStyle: 'italic' }}>Nenhuma venda registrada.</Text>
+                )}
+              </View>
+            </Animated.View>
+
+            {/* HORÁRIO PICO */}
+            <Animated.View entering={FadeInUp.duration(500).delay(300)}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 20, borderWidth: 1.5, borderColor: '#c8cac6' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Ionicons name="time-outline" size={20} color="#3b82f6" />
+                  <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '800' }}>Horários de Pico</Text>
+                </View>
+                <Text style={{ color: '#707b55', fontSize: 12, marginBottom: 16 }}>Horários com mais pedidos registrados nas vendas de rua.</Text>
+                {ruaMetrics.horaPico.length > 0 ? (
+                  ruaMetrics.horaPico.map((h, index) => (
+                    <View key={index} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: index === ruaMetrics.horaPico.length -1 ? 0 : 12 }}>
+                      <View style={{ width: 56, height: 36, backgroundColor: index === 0 ? '#3b82f6' : 'rgba(59, 130, 246, 0.12)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                        <Text style={{ color: index === 0 ? '#FFF' : '#3b82f6', fontWeight: '800', fontSize: 15 }}>{h.hour}h</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ height: 8, backgroundColor: '#F5F0EA', borderRadius: 4, overflow: 'hidden' }}>
+                          <View style={{ width: `${Math.min((h.count / ruaMetrics.horaPico[0].count) * 100, 100)}%`, height: '100%', backgroundColor: index === 0 ? '#3b82f6' : 'rgba(59, 130, 246, 0.4)', borderRadius: 4 }} />
+                        </View>
+                      </View>
+                      <Text style={{ color: '#1c1f0f', fontSize: 14, fontWeight: '700', marginLeft: 14, width: 60, textAlign: 'right' }}>{h.count} ped.</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={{ color: '#707b55', fontStyle: 'italic' }}>Sem dados de horário.</Text>
+                )}
+              </View>
+            </Animated.View>
+
+            {/* TOP EVENTOS DE RUA */}
+            <Animated.View entering={FadeInUp.duration(500).delay(350)}>
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 24, padding: 20, marginBottom: 20, borderWidth: 1.5, borderColor: '#c8cac6' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <Ionicons name="podium-outline" size={20} color="#78a764" />
+                  <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '800' }}>Top Eventos de Rua</Text>
+                </View>
+                <Text style={{ color: '#707b55', fontSize: 12, marginBottom: 16 }}>Eventos de venda de rua com maior faturamento.</Text>
+                {ruaMetrics.topEventos.map((ev, index) => (
+                  <View key={ev.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: index === ruaMetrics.topEventos.length -1 ? 0 : 14 }}>
+                    <View style={{ width: 28, height: 28, backgroundColor: 'rgba(120, 167, 100, 0.15)', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+                      <Text style={{ color: '#78a764', fontWeight: '800', fontSize: 14 }}>{index + 1}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{ev.nome}</Text>
+                      <Text style={{ color: '#707b55', fontSize: 12, marginTop: 2 }}>{ev.data} • {ev.pedidos} pedidos • {formatNum(ev.margem)}% margem</Text>
+                    </View>
+                    <Text style={{ color: '#78a764', fontSize: 16, fontWeight: '800', marginLeft: 12 }}>{formatCurrency(ev.receita)}</Text>
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
+          </>
+        ) : (
+          <>
         
         {/* BARÔMETRO DE PERFORMANCE */}
         <Animated.View entering={FadeInUp.duration(500)}>
@@ -586,9 +819,12 @@ export default function InsightsScreen() {
             </View>
           </Animated.View>
         )}
+        </>
+        )}
 
       </ScrollView>
 
+      {activeTab === 'eventos' && (
       <Modal visible={!!selectedPartyDetail} transparent={true} animationType="fade" onRequestClose={() => setSelectedPartyDetail(null)}>
         <TouchableOpacity activeOpacity={1} onPress={() => setSelectedPartyDetail(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
            <TouchableOpacity activeOpacity={1} style={{ backgroundColor: '#FFF', borderRadius: 24, padding: 24, width: '100%', maxWidth: 400 }}>
@@ -628,6 +864,7 @@ export default function InsightsScreen() {
            </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+      )}
 
     </SafeAreaView>
   );

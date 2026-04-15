@@ -9,8 +9,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+
 import { getDatabase, ref, onValue, update } from 'firebase/database';
 import { app } from '../src/config/firebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +46,8 @@ export default function FechamentoFestaScreen() {
   const [forceRecalc, setForceRecalc] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [eventSearch, setEventSearch] = useState('');
   const router = useRouter();
   const db = getDatabase(app);
   const isOffline = useNetworkStore(s => s.isOffline);
@@ -110,6 +113,7 @@ export default function FechamentoFestaScreen() {
   useEffect(() => {
     if (selectedFestaId) {
       const party = festas.find(f => f.id === selectedFestaId);
+      const isRua = party?.tipoFesta === 'Venda de Rua';
       if (party && party.fechamento) {
         setReceita(party.fechamento.receita?.toString() || '');
         setConvidados(party.fechamento.convidados?.toString() || '');
@@ -117,6 +121,14 @@ export default function FechamentoFestaScreen() {
         setAjudante(party.fechamento.ajudante?.toString() || '');
         setOutros(party.fechamento.outros?.toString() || '');
         setPerdas(party.fechamento.perdas || []);
+      } else if (isRua) {
+        // Street sale: auto-calc revenue from orders
+        setReceita('');
+        setConvidados('');
+        setTransporte('');
+        setAjudante('0');
+        setOutros('');
+        setPerdas([]);
       } else {
         const precoPacote = party?.pacote?.valorPorConvidado || 0;
         const convidadosBase = party?.quantidadeConvidados || 0;
@@ -129,7 +141,7 @@ export default function FechamentoFestaScreen() {
         setOutros('');
         setPerdas([]);
       }
-      setForceRecalc(false); // Reseta o destravamento
+      setForceRecalc(false);
     }
   }, [selectedFestaId, festas]);
 
@@ -141,7 +153,15 @@ export default function FechamentoFestaScreen() {
 
   const activeOrders = pedidos.filter(p => (p.partyId === selectedFestaId || p.festaId === selectedFestaId) && p.status !== 'cancelado');
   const party = festas.find(f => f.id === selectedFestaId);
+  const isVendaRua = party?.tipoFesta === 'Venda de Rua';
   const isFrozen = party?.fechamento?.custoBarHistorico !== undefined && !forceRecalc;
+
+  // Street sale auto-revenue: sum totalValue from all orders linked to this event
+  const ruaReceitaAuto = isVendaRua
+    ? activeOrders.reduce((sum, p) => sum + (parseFloat(p.totalValue) || 0), 0)
+    : 0;
+  const ruaTotalPedidos = isVendaRua ? activeOrders.length : 0;
+  const ruaTicketMedio = ruaTotalPedidos > 0 ? ruaReceitaAuto / ruaTotalPedidos : 0;
 
   // Custo Bar Padrão Dinâmico
   let dynamicTotalBar = 0;
@@ -168,16 +188,14 @@ export default function FechamentoFestaScreen() {
       return tot + ((insumoObj.custoUnidadeMinima || 0) * (parseFloat(perda.quantity) || 0));
   }, 0);
 
-  // Decisão do valor (Snap Histórico ou Dinâmico)
   const totalBar = isFrozen ? party.fechamento.custoBarHistorico : dynamicTotalBar;
-  
-  // Se as perdas editadas na tela forem diferentes (length ou items) das do snapshot, considera como editado e usa dinâmico.
   const isPerdasEdited = JSON.stringify(perdas) !== JSON.stringify(party?.fechamento?.perdas || []);
   const totalPerdas = (isFrozen && !isPerdasEdited) 
       ? (party.fechamento.custoPerdasHistorico ?? dynamicTotalPerdas) 
       : dynamicTotalPerdas;
 
-  const receitaNum = calcString(receita);
+  // Use auto-revenue for street sales, manual for events
+  const receitaNum = isVendaRua ? ruaReceitaAuto : calcString(receita);
   const convidadosNum = calcString(convidados);
   const transporteNum = calcString(transporte);
   const ajudanteNum = calcString(ajudante);
@@ -187,11 +205,11 @@ export default function FechamentoFestaScreen() {
   const custosTotaisOperacao = totalBar + totalPerdas + custosLogistica;
   const lucroLiquido = receitaNum - custosTotaisOperacao;
 
-  // Ticket Medio metrics
+  // Ticket Medio metrics (per guest for events, per order for street)
   const custoPorConvidado = convidadosNum > 0 ? (custosTotaisOperacao / convidadosNum) : 0;
   const lucroPorConvidado = convidadosNum > 0 ? (lucroLiquido / convidadosNum) : 0;
+  const lucroPorPedidoRua = ruaTotalPedidos > 0 ? (lucroLiquido / ruaTotalPedidos) : 0;
   
-  // Novas Métricas de Insights
   const margemContribuicao = receitaNum > 0 ? (lucroLiquido / receitaNum) * 100 : 0;
   const precoSugerido20 = convidadosNum > 0 ? (custosTotaisOperacao / 0.8) / convidadosNum : 0;
 
@@ -230,22 +248,22 @@ export default function FechamentoFestaScreen() {
     }
 
     if (!selectedFestaId) {
-      Alert.alert('Erro', 'Selecione uma festa primeiro.');
+      Alert.alert('Erro', 'Selecione um evento primeiro.');
       return;
     }
     setSaving(true);
     try {
       const fechamento = {
         receita: receitaNum,
-        convidados: convidadosNum,
+        convidados: isVendaRua ? 0 : convidadosNum,
         transporte: transporteNum,
         ajudante: ajudanteNum,
         outros: outrosNum,
         perdas: perdas,
         lucroLiquidoConsolidado: lucroLiquido,
-        // Custo Histórico Salvo Fixo:
         custoBarHistorico: totalBar,
         custoPerdasHistorico: totalPerdas,
+        ...(isVendaRua && { totalPedidosRua: ruaTotalPedidos, ticketMedioRua: ruaTicketMedio }),
         timestampAtualizacao: new Date().toISOString()
       };
       
@@ -304,26 +322,131 @@ export default function FechamentoFestaScreen() {
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
           
-          {/* Party Selector */}
+          {/* Event Selector - Premium Dropdown */}
           <Animated.View entering={FadeInUp.duration(500).delay(100)}>
             <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1.5, borderColor: '#c8cac6', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 }}>
               <Text style={{ color: '#1c1f0f', fontSize: 14, fontWeight: '700', marginBottom: 8 }}>Selecionar Evento</Text>
-              <View style={{ backgroundColor: 'rgba(204, 158, 111, 0.1)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(204, 158, 111, 0.3)' }}>
-                <Picker
-                  selectedValue={selectedFestaId}
-                  onValueChange={setSelectedFestaId}
-                  style={{ color: '#1c1f0f' }}
-                  dropdownIconColor="#cc9e6f"
-                >
-                  <Picker.Item label="Escolha a Festa..." value="" enabled={false} />
-                  {festas.map(f => (
-                    <Picker.Item key={f.id} label={`${f.nome} (${f.data})`} value={f.id} />
-                  ))}
-                </Picker>
-              </View>
-              {isOffline && <Text style={{ color: '#707b55', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>*Somente festas gravadas no cache.</Text>}
+              <TouchableOpacity
+                onPress={() => { setShowEventPicker(true); setEventSearch(''); }}
+                style={{ backgroundColor: 'rgba(204, 158, 111, 0.1)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(204, 158, 111, 0.3)', paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                {selectedFestaId ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                    <Ionicons
+                      name={festas.find(f => f.id === selectedFestaId)?.tipoFesta === 'Venda de Rua' ? 'storefront-outline' : 'calendar-outline'}
+                      size={20}
+                      color="#cc9e6f"
+                      style={{ marginRight: 10 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '700' }} numberOfLines={1}>
+                        {festas.find(f => f.id === selectedFestaId)?.nome || 'Evento'}
+                      </Text>
+                      <Text style={{ color: '#707b55', fontSize: 12, marginTop: 2 }}>
+                        {festas.find(f => f.id === selectedFestaId)?.data || ''}
+                        {festas.find(f => f.id === selectedFestaId)?.tipoFesta ? ` • ${festas.find(f => f.id === selectedFestaId).tipoFesta}` : ''}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={{ color: '#a0a29f', fontSize: 15 }}>Escolha o Evento...</Text>
+                )}
+                <Ionicons name="chevron-down" size={20} color="#cc9e6f" />
+              </TouchableOpacity>
+              {isOffline && <Text style={{ color: '#707b55', fontSize: 12, marginTop: 8, fontStyle: 'italic' }}>*Somente eventos gravados no cache.</Text>}
             </View>
           </Animated.View>
+
+          {/* Event Picker Modal */}
+          <Modal visible={showEventPicker} transparent animationType="slide" onRequestClose={() => setShowEventPicker(false)}>
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+              <View style={{ backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '70%', paddingBottom: 30 }}>
+                {/* Modal Header */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: '#e8e4de' }}>
+                  <Text style={{ color: '#1c1f0f', fontSize: 18, fontWeight: '800' }}>Selecionar Evento</Text>
+                  <TouchableOpacity onPress={() => setShowEventPicker(false)} style={{ padding: 4 }}>
+                    <Ionicons name="close" size={24} color="#1c1f0f" />
+                  </TouchableOpacity>
+                </View>
+                {/* Search */}
+                <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F0EA', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e4de' }}>
+                    <Ionicons name="search" size={18} color="#707b55" style={{ marginRight: 8 }} />
+                    <TextInput
+                      value={eventSearch}
+                      onChangeText={setEventSearch}
+                      placeholder="Buscar evento..."
+                      placeholderTextColor="#a0a29f"
+                      style={{ flex: 1, fontSize: 15, color: '#1c1f0f', padding: 0 }}
+                    />
+                    {eventSearch.length > 0 && (
+                      <TouchableOpacity onPress={() => setEventSearch('')}>
+                        <Ionicons name="close-circle" size={18} color="#a0a29f" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+                {/* Event List */}
+                <ScrollView style={{ paddingHorizontal: 20 }}>
+                  {festas
+                    .filter(f => {
+                      if (!eventSearch) return true;
+                      const q = eventSearch.toLowerCase();
+                      return (f.nome || '').toLowerCase().includes(q) || (f.data || '').includes(q) || (f.tipoFesta || '').toLowerCase().includes(q);
+                    })
+                    .map(f => {
+                      const isSelected = f.id === selectedFestaId;
+                      const isRua = f.tipoFesta === 'Venda de Rua';
+                      const iconName = isRua ? 'storefront-outline' : (f.tipoFesta === 'Casamento' ? 'heart-outline' : f.tipoFesta === '15 Anos' ? 'gift-outline' : f.tipoFesta === 'Formatura' ? 'school-outline' : f.tipoFesta === 'Corporativo' ? 'briefcase-outline' : f.tipoFesta === 'Aniversário' ? 'happy-outline' : 'calendar-outline');
+                      return (
+                        <TouchableOpacity
+                          key={f.id}
+                          onPress={() => { setSelectedFestaId(f.id); setShowEventPicker(false); }}
+                          style={{
+                            flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 12,
+                            borderRadius: 14, marginBottom: 6,
+                            backgroundColor: isSelected ? 'rgba(204, 158, 111, 0.12)' : 'transparent',
+                            borderWidth: isSelected ? 1.5 : 0, borderColor: isSelected ? '#cc9e6f' : 'transparent',
+                          }}
+                        >
+                          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: isRua ? 'rgba(120, 167, 100, 0.12)' : 'rgba(204, 158, 111, 0.12)', justifyContent: 'center', alignItems: 'center', marginRight: 14 }}>
+                            <Ionicons name={iconName} size={20} color={isRua ? '#78a764' : '#cc9e6f'} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ color: '#1c1f0f', fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{f.nome || 'Sem nome'}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <Text style={{ color: '#707b55', fontSize: 12 }}>{f.data || 'Sem data'}</Text>
+                              {f.tipoFesta && (
+                                <View style={{ backgroundColor: isRua ? 'rgba(120, 167, 100, 0.15)' : 'rgba(204, 158, 111, 0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ color: isRua ? '#78a764' : '#cc9e6f', fontSize: 11, fontWeight: '700' }}>{f.tipoFesta}</Text>
+                                </View>
+                              )}
+                              {f.fechamento && (
+                                <View style={{ backgroundColor: 'rgba(120, 167, 100, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ color: '#78a764', fontSize: 10, fontWeight: '700' }}>FECHADO</Text>
+                                </View>
+                              )}
+                            </View>
+                          </View>
+                          {isSelected && <Ionicons name="checkmark-circle" size={22} color="#cc9e6f" />}
+                        </TouchableOpacity>
+                      );
+                    })
+                  }
+                  {festas.filter(f => {
+                    if (!eventSearch) return true;
+                    const q = eventSearch.toLowerCase();
+                    return (f.nome || '').toLowerCase().includes(q) || (f.data || '').includes(q) || (f.tipoFesta || '').toLowerCase().includes(q);
+                  }).length === 0 && (
+                    <View style={{ alignItems: 'center', padding: 30 }}>
+                      <Ionicons name="search-outline" size={32} color="#a0a29f" />
+                      <Text style={{ color: '#a0a29f', fontSize: 14, marginTop: 8 }}>Nenhum evento encontrado.</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {selectedFestaId ? (
             <Animated.View entering={FadeInUp.duration(500).delay(200)}>
@@ -351,16 +474,39 @@ export default function FechamentoFestaScreen() {
 
               {/* Formulário Administrativo */}
               <View style={{ backgroundColor: 'rgba(28, 31, 15, 0.04)', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#e8e4de' }}>
-                <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Contrato e Receita (Entrada)</Text>
-                {inputGroup('Receita Bruta Cobrada', receita, setReceita, 'cash-outline', 'Ex: 3500')}
-                {inputGroup('Qtd Convidados Reais', convidados, (text) => {
-                  setConvidados(text);
-                  const numConv = parseFloat(text) || 0;
-                  const preco = party?.pacote?.valorPorConvidado || 0;
-                  if (preco > 0 && !party?.fechamento && !forceRecalc) {
-                    setReceita((numConv * preco).toString());
-                  }
-                }, 'people-outline', 'Cabeças presentes', false)}
+                {isVendaRua ? (
+                  <>
+                    <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Receita de Vendas (Automático)</Text>
+                    <View style={{ backgroundColor: 'rgba(120, 167, 100, 0.08)', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(120, 167, 100, 0.2)' }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#707b55', fontSize: 14 }}>Receita Total:</Text>
+                        <Text style={{ color: '#78a764', fontSize: 20, fontWeight: '800' }}>{formatCurrency(ruaReceitaAuto)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: '#707b55', fontSize: 14 }}>Pedidos Fechados:</Text>
+                        <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '700' }}>{ruaTotalPedidos}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <Text style={{ color: '#707b55', fontSize: 14 }}>Ticket Médio:</Text>
+                        <Text style={{ color: '#cc9e6f', fontSize: 16, fontWeight: '700' }}>{formatCurrency(ruaTicketMedio)}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ color: '#a0a29f', fontSize: 11, fontStyle: 'italic', marginBottom: 12 }}>*Valores calculados automaticamente dos pedidos registrados.</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={{ color: '#1c1f0f', fontSize: 16, fontWeight: '700', marginBottom: 16 }}>Contrato e Receita (Entrada)</Text>
+                    {inputGroup('Receita Bruta Cobrada', receita, setReceita, 'cash-outline', 'Ex: 3500')}
+                    {inputGroup('Qtd Convidados Reais', convidados, (text) => {
+                      setConvidados(text);
+                      const numConv = parseFloat(text) || 0;
+                      const preco = party?.pacote?.valorPorConvidado || 0;
+                      if (preco > 0 && !party?.fechamento && !forceRecalc) {
+                        setReceita((numConv * preco).toString());
+                      }
+                    }, 'people-outline', 'Cabeças presentes', false)}
+                  </>
+                )}
 
                 <View style={{ height: 1, backgroundColor: '#c8cac6', marginVertical: 10 }} />
 
@@ -475,10 +621,18 @@ export default function FechamentoFestaScreen() {
                     </View>
                  </View>
                  <View style={{ alignSelf: 'flex-end', backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
-                    <Text style={{ color: '#cc9e6f', fontSize: 12, fontWeight: '700' }}>MÉDIA: {formatCurrency(lucroPorConvidado)} lucro / conv.</Text>
+                    <Text style={{ color: '#cc9e6f', fontSize: 12, fontWeight: '700' }}>
+                      {isVendaRua
+                        ? `MÉDIA: ${formatCurrency(lucroPorPedidoRua)} lucro / pedido`
+                        : `MÉDIA: ${formatCurrency(lucroPorConvidado)} lucro / conv.`}
+                    </Text>
                  </View>
                  <View style={{ alignSelf: 'flex-end', marginTop: 4 }}>
-                    <Text style={{ color: '#c8cac6', fontSize: 11 }}>Custo da operação: {formatCurrency(custoPorConvidado)} / conv.</Text>
+                    <Text style={{ color: '#c8cac6', fontSize: 11 }}>
+                      {isVendaRua
+                        ? `Ticket médio: ${formatCurrency(ruaTicketMedio)} / pedido`
+                        : `Custo da operação: ${formatCurrency(custoPorConvidado)} / conv.`}
+                    </Text>
                  </View>
 
                  {/* Insights Estratégicos Section */}
@@ -488,10 +642,12 @@ export default function FechamentoFestaScreen() {
                        <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Insights Estratégicos</Text>
                     </View>
                     
+                    {!isVendaRua && (
                     <View style={{ marginBottom: 12 }}>
                        <Text style={{ color: '#c8cac6', fontSize: 12, marginBottom: 4 }}>Preço Sugerido / Conv. (Para 20% Lucro exato):</Text>
                        <Text style={{ color: '#eab308', fontSize: 16, fontWeight: '700' }}>{formatCurrency(precoSugerido20)}</Text>
                     </View>
+                    )}
 
                     {top3DrinksArr.length > 0 && (
                       <View>
